@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Trophy, Award, GitPullRequest, FolderGit2, Info } from 'lucide-react'
 import { getLeaderboard } from '../services/issuefitApi'
 import EmptyLeaderboard from '../components/EmptyLeaderboard'
 import LoadingState from '../components/LoadingState'
@@ -13,74 +14,188 @@ export default function LeaderboardPage() {
       .then((data) => {
         if (!cancelled) setEntries(data?.entries || data?.leaderboard || null)
       })
-      .catch(() => { if (!cancelled) setEntries(null) })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
+      .catch(() => {
+        if (!cancelled) setEntries(null)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   return (
     <>
       <style>{`
-        .lb-heading { font-size: 26px; font-weight: 800; color: var(--text); margin-bottom: 4px; letter-spacing: -0.5px; }
-        .lb-sub { font-size: 14px; color: var(--muted); margin-bottom: 24px; }
-        .lb-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow-x: auto; }
-        .lb-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        .lb-table th {
-          text-align: left; padding: 12px 16px; font-size: 11px; font-weight: 700;
-          color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px;
-          border-bottom: 1px solid var(--border); background: var(--surface-2); white-space: nowrap;
+        .leaderboard-header-block {
+          margin-bottom: 24px;
         }
-        .lb-table td { padding: 14px 16px; border-bottom: 1px solid var(--border-light); vertical-align: middle; }
-        .lb-table tr:last-child td { border-bottom: none; }
-        .lb-table tbody tr:hover td { background: var(--surface-hover); }
-        .lb-rank { font-weight: 800; font-size: 15px; }
-        .lb-rank-1 { color: #ffd700; }
-        .lb-rank-2 { color: #c0c0c0; }
-        .lb-rank-3 { color: #cd7f32; }
-        .lb-user { display: flex; align-items: center; gap: 10px; font-weight: 600; }
-        .lb-avatar {
-          width: 30px; height: 30px; border-radius: 50%; background: var(--border);
-          display: flex; align-items: center; justify-content: center;
-          font-size: 12px; font-weight: 700; color: var(--muted); overflow: hidden; flex-shrink: 0;
+
+        .leaderboard-title {
+          font-size: 28px;
+          font-weight: 800;
+          color: var(--text);
+          letter-spacing: -0.03em;
+          margin-bottom: 6px;
         }
-        .lb-avatar img { width: 100%; height: 100%; object-fit: cover; }
-        .lb-score { font-weight: 800; color: var(--success); font-size: 15px; }
-        .lb-note { font-size: 12px; color: var(--muted); margin-top: 14px; line-height: 1.5; }
+
+        .leaderboard-subtitle {
+          font-size: 14px;
+          color: var(--muted);
+        }
+
+        .leaderboard-table-card {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-md);
+          overflow-x: auto;
+          box-shadow: var(--shadow-sm);
+        }
+
+        .leaderboard-table {
+          width: 100%;
+          border-collapse: collapse;
+          text-align: left;
+        }
+
+        .leaderboard-table th {
+          background: var(--surface-2);
+          padding: 14px 18px;
+          font-size: 11px;
+          font-weight: 700;
+          color: var(--muted);
+          text-transform: uppercase;
+          letter-spacing: 0.6px;
+          border-bottom: 1px solid var(--border);
+          white-space: nowrap;
+        }
+
+        .leaderboard-table td {
+          padding: 14px 18px;
+          border-bottom: 1px solid var(--border);
+          vertical-align: middle;
+          font-size: 13px;
+        }
+
+        .leaderboard-table tbody tr:last-child td {
+          border-bottom: none;
+        }
+
+        .leaderboard-table tbody tr:hover td {
+          background-color: var(--surface-hover);
+        }
+
+        .rank-badge {
+          font-weight: 800;
+          font-size: 14px;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .rank-1 { color: #f59e0b; }
+        .rank-2 { color: #94a3b8; }
+        .rank-3 { color: #d97706; }
+
+        .contributor-cell {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          font-weight: 600;
+        }
+
+        .contributor-avatar {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background: var(--surface-2);
+          border: 1px solid var(--border);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 12px;
+          font-weight: 700;
+          color: var(--muted);
+          overflow: hidden;
+          flex-shrink: 0;
+        }
+
+        .contributor-avatar img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .contributor-link {
+          color: var(--text);
+          text-decoration: none;
+          transition: color 0.15s ease;
+        }
+
+        .contributor-link:hover {
+          color: var(--primary);
+        }
+
+        .leaderboard-score-val {
+          font-weight: 700;
+          color: var(--success);
+          font-size: 14px;
+        }
+
+        .leaderboard-explainer-note {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          font-size: 12px;
+          color: var(--muted);
+          margin-top: 14px;
+          line-height: 1.5;
+        }
       `}</style>
 
-      <h1 className="lb-heading">Leaderboard</h1>
-      <p className="lb-sub">Top contributors ranked by verified contribution activity.</p>
+      <div className="leaderboard-header-block">
+        <h1 className="leaderboard-title">Contributor Leaderboard</h1>
+        <p className="leaderboard-subtitle">
+          Top contributors ranked by verified open-source contributions and issue resolutions.
+        </p>
+      </div>
 
       {loading ? (
-        <LoadingState message="Loading leaderboard…" />
+        <LoadingState message="Fetching contributor leaderboard data..." />
       ) : !entries || entries.length === 0 ? (
         <EmptyLeaderboard />
       ) : (
         <>
-          <div className="lb-wrap">
-            <table className="lb-table">
+          <div className="leaderboard-table-card">
+            <table className="leaderboard-table">
               <thead>
                 <tr>
-                  <th>Rank</th>
+                  <th style={{ width: '80px' }}>Rank</th>
                   <th>Contributor</th>
                   <th>Contributions</th>
                   <th>Repositories</th>
-                  <th>Score</th>
+                  <th>Contribution Score</th>
                 </tr>
               </thead>
               <tbody>
-                {entries.map((entry, i) => {
-                  const rank = i + 1
+                {entries.map((entry, idx) => {
+                  const rank = idx + 1
+                  const rankClass = rank <= 3 ? ` rank-${rank}` : ''
                   return (
-                    <tr key={entry.username || i}>
+                    <tr key={entry.username || idx}>
                       <td>
-                        <span className={`lb-rank${rank <= 3 ? ` lb-rank-${rank}` : ''}`}>
+                        <span className={`rank-badge${rankClass}`}>
+                          {rank === 1 && <Trophy size={14} />}
+                          {rank === 2 && <Award size={14} />}
+                          {rank === 3 && <Award size={14} />}
                           #{rank}
                         </span>
                       </td>
+
                       <td>
-                        <div className="lb-user">
-                          <div className="lb-avatar">
+                        <div className="contributor-cell">
+                          <div className="contributor-avatar">
                             {entry.avatar_url ? (
                               <img src={entry.avatar_url} alt={entry.username} />
                             ) : (
@@ -91,27 +206,47 @@ export default function LeaderboardPage() {
                             href={`https://github.com/${entry.username}`}
                             target="_blank"
                             rel="noreferrer"
-                            style={{ color: 'var(--text)' }}
+                            className="contributor-link"
                           >
                             {entry.username}
                           </a>
                         </div>
                       </td>
-                      <td style={{ color: 'var(--muted)' }}>{entry.contributions ?? entry.merged_prs ?? '—'}</td>
-                      <td style={{ color: 'var(--muted)' }}>{entry.repositories ?? '—'}</td>
-                      <td><span className="lb-score">{entry.score ?? '—'}</span></td>
+
+                      <td>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                          <GitPullRequest size={13} style={{ color: 'var(--muted)' }} />
+                          {entry.contributions ?? entry.merged_prs ?? '—'}
+                        </span>
+                      </td>
+
+                      <td>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                          <FolderGit2 size={13} style={{ color: 'var(--muted)' }} />
+                          {entry.repositories ?? '—'}
+                        </span>
+                      </td>
+
+                      <td>
+                        <span className="leaderboard-score-val">
+                          {entry.score != null ? `${entry.score} pts` : '—'}
+                        </span>
+                      </td>
                     </tr>
                   )
                 })}
               </tbody>
             </table>
           </div>
-          <p className="lb-note">
-            Scores reflect merged pull requests and repository contributions verified through GitHub data.
-          </p>
+
+          <div className="leaderboard-explainer-note">
+            <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>
+              Leaderboard scores are calculated from verified merged pull requests and contribution metrics provided by the backend API.
+            </span>
+          </div>
         </>
       )}
     </>
   )
 }
-
