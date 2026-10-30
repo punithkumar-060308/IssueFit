@@ -3,31 +3,45 @@ import { formatDifficulty, difficultyColor } from '../utils/formatters'
 export default function DifficultyBadge({ difficulty }) {
   const label = formatDifficulty(difficulty)
   const color = difficultyColor(difficulty)
+
   return (
     <>
       <style>{`
-        .difficulty-badge {
+        .diff-tag-badge {
           display: inline-flex;
           align-items: center;
-          padding: 3px 10px;
-          border-radius: 20px;
+          gap: 5px;
+          padding: 3px 9px;
+          border-radius: 14px;
           font-size: 11px;
           font-weight: 700;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.4px;
           text-transform: uppercase;
-          border: 1.5px solid currentColor;
+          border: 1px solid currentColor;
           white-space: nowrap;
           flex-shrink: 0;
         }
+
+        .diff-tag-dot {
+          width: 5px;
+          height: 5px;
+          border-radius: 50%;
+          background: currentColor;
+        }
       `}</style>
+
       <span
-        className="difficulty-badge"
-        style={{ color, borderColor: color, background: `${color}18` }}
-        title={`Difficulty: ${label}`}
+        className="diff-tag-badge"
+        style={{
+          color,
+          borderColor: color,
+          backgroundColor: `${color}18`,
+        }}
+        title={`Estimated Difficulty: ${label}`}
       >
-        {label}
+        <span className="diff-tag-dot" />
+        <span>{label}</span>
       </span>
     </>
   )
 }
-

@@ -13,9 +13,12 @@ function App() {
   const [connectedRepo, setConnectedRepo] = useState(null)
 
   const toggleTheme = () => {
-    const next = theme === 'dark' ? 'light' : 'dark'
-    setTheme(next)
-    document.documentElement.setAttribute('data-theme', next === 'light' ? 'light' : '')
+    const nextTheme = theme === 'dark' ? 'light' : 'dark'
+    setTheme(nextTheme)
+    document.documentElement.setAttribute(
+      'data-theme',
+      nextTheme === 'light' ? 'light' : ''
+    )
   }
 
   return (
@@ -28,24 +31,34 @@ function App() {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
       />
-      <div className="app-body">
-        <div className="main-content">
-          {activeTab === 'discover' ? (
-            <DiscoverPage searchQuery={searchQuery} connectedRepo={connectedRepo} />
-          ) : (
-            <LeaderboardPage />
+
+      <main className="app-main">
+        <div
+          className={`dashboard-container${
+            activeTab === 'leaderboard' ? ' full-width' : ''
+          }`}
+        >
+          <div className="content-column">
+            {activeTab === 'discover' ? (
+              <DiscoverPage
+                searchQuery={searchQuery}
+                connectedRepo={connectedRepo}
+              />
+            ) : (
+              <LeaderboardPage />
+            )}
+          </div>
+
+          {activeTab === 'discover' && (
+            <aside className="sidebar-column">
+              <RepositoryConnectPanel onRepoConnected={setConnectedRepo} />
+              <TrendingTodayPanel />
+            </aside>
           )}
         </div>
-        {activeTab === 'discover' && (
-          <aside className="sidebar">
-            <RepositoryConnectPanel onRepoConnected={setConnectedRepo} />
-            <TrendingTodayPanel />
-          </aside>
-        )}
-      </div>
+      </main>
     </div>
   )
 }
 
 export default App
-

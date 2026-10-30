@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import SearchForm from '../components/SearchForm'
 import FilterPanel, { DEFAULT_FILTERS } from '../components/FilterPanel'
-import IssueList from '../components/IssueList'
 import IssueTable from '../components/IssueTable'
+import IssueList from '../components/IssueList'
 import ResultsHeader from '../components/ResultsHeader'
 import LoadingState from '../components/LoadingState'
 import EmptyState from '../components/EmptyState'
@@ -10,85 +10,157 @@ import ErrorMessage from '../components/ErrorMessage'
 import { useRecommendations } from '../hooks/useRecommendations'
 
 function useWindowWidth() {
-  const [width, setWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200)
+  const [width, setWidth] = useState(
+    typeof window !== 'undefined' ? window.innerWidth : 1200
+  )
   useEffect(() => {
-    const handler = () => setWidth(window.innerWidth)
-    window.addEventListener('resize', handler)
-    return () => window.removeEventListener('resize', handler)
+    const handleResize = () => setWidth(window.innerWidth)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
   }, [])
   return width
 }
 
-function applyFilters(list, filters, query) {
-  let out = [...list]
-  if (query?.trim()) {
-    const q = query.trim().toLowerCase()
-    out = out.filter(
-      (i) =>
-        i.title?.toLowerCase().includes(q) ||
-        String(i.number).includes(q) ||
-        i.repository?.toLowerCase().includes(q) ||
-        i.labels?.some((l) => l.toLowerCase().includes(q))
+function filterRecommendations(list, filters, searchQuery) {
+  let result = [...list]
+
+  // Global search filtering
+  if (searchQuery && searchQuery.trim()) {
+    const q = searchQuery.trim().toLowerCase()
+    result = result.filter(
+      (issue) =>
+        issue.title?.toLowerCase().includes(q) ||
+        String(issue.number).includes(q) ||
+        issue.repository?.toLowerCase().includes(q) ||
+        issue.labels?.some((l) => l.toLowerCase().includes(q))
     )
   }
-  if (filters.difficulty)
-    out = out.filter((i) =>
-      (i.difficulty || '').toLowerCase() === filters.difficulty.toLowerCase()
+
+  // Difficulty filter
+  if (filters.difficulty) {
+    result = result.filter(
+      (issue) =>
+        (issue.difficulty || '').toLowerCase() === filters.difficulty.toLowerCase()
     )
-  if (filters.label)
-    out = out.filter((i) =>
-      i.labels?.some((l) => l.toLowerCase() === filters.label.toLowerCase())
+  }
+
+  // Label filter
+  if (filters.label) {
+    result = result.filter((issue) =>
+      issue.labels?.some((l) => l.toLowerCase() === filters.label.toLowerCase())
     )
-  if (filters.minScore > 0)
-    out = out.filter((i) => Number(i.final_score) >= filters.minScore)
-  if (filters.sort === 'recent')
-    out = out.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0))
-  return out
+  }
+
+  // Language filter
+  if (filters.language) {
+    result = result.filter((issue) =>
+      issue.languages?.some((lang) => lang.toLowerCase() === filters.language.toLowerCase())
+    )
+  }
+
+  // Min Score filter
+  if (filters.minScore > 0) {
+    result = result.filter((issue) => Number(issue.final_score) >= filters.minScore)
+  }
+
+  // Sort filter
+  if (filters.sort === 'recent') {
+    result = result.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0))
+  } else {
+    // Best match default
+    result = result.sort((a, b) => Number(b.final_score || 0) - Number(a.final_score || 0))
+  }
+
+  return result
 }
 
 export default function DiscoverPage({ searchQuery, connectedRepo }) {
-  const { isLoading, recommendations, error, hasSearched, lastSearch, search } =
-    useRecommendations()
+  const {
+    isLoading,
+    recommendations,
+    error,
+    hasSearched,
+    lastSearch,
+    search,
+  } = useRecommendations()
+
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [prefill, setPrefill] = useState(null)
-  const width = useWindowWidth()
-  const prevRepo = useRef(null)
+  const windowWidth = useWindowWidth()
+  const prevConnectedRepo = useRef(null)
 
   useEffect(() => {
-    const key = connectedRepo ? `${connectedRepo.owner}/${connectedRepo.repo}` : null
-    if (key && key !== prevRepo.current) {
-      prevRepo.current = key
-      setPrefill({ owner: connectedRepo.owner, repo: connectedRepo.repo })
+    if (connectedRepo) {
+      const repoKey = `${connectedRepo.owner}/${connectedRepo.repo}`
+      if (repoKey !== prevConnectedRepo.current) {
+        prevConnectedRepo.current = repoKey
+        setPrefill({ owner: connectedRepo.owner, repo: connectedRepo.repo })
+      }
     }
   }, [connectedRepo])
 
   const availableLabels = useMemo(() => {
-    const s = new Set()
-    recommendations.forEach((r) => r.labels?.forEach((l) => s.add(l)))
-    return [...s]
+    const set = new Set()
+    recommendations.forEach((item) => {
+      item.labels?.forEach((lbl) => set.add(lbl))
+    })
+    return Array.from(set).sort()
   }, [recommendations])
 
-  const filtered = useMemo(
-    () => applyFilters(recommendations, filters, searchQuery),
-    [recommendations, filters, searchQuery]
-  )
+  const availableLanguages = useMemo(() => {
+    const set = new Set()
+    recommendations.forEach((item) => {
+      item.languages?.forEach((lang) => set.add(lang))
+    })
+    return Array.from(set).sort()
+  }, [recommendations])
 
-  const useTable = width >= 900
+  const filteredIssues = useMemo(() => {
+    return filterRecommendations(recommendations, filters, searchQuery)
+  }, [recommendations, filters, searchQuery])
+
+  const showTableView = windowWidth >= 960
 
   return (
     <>
       <style>{`
-        .disc-heading {
-          font-size: 26px; font-weight: 800; color: var(--text);
-          margin-bottom: 4px; letter-spacing: -0.5px;
+        .page-header-block {
+          margin-bottom: 24px;
         }
-        .disc-sub { font-size: 14px; color: var(--muted); margin-bottom: 22px; }
+
+        .page-main-heading {
+          font-size: 28px;
+          font-weight: 800;
+          color: var(--text);
+          letter-spacing: -0.03em;
+          margin-bottom: 6px;
+        }
+
+        .page-main-subtext {
+          font-size: 14px;
+          color: var(--muted);
+          line-height: 1.5;
+        }
+
+        .results-container {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          margin-top: 12px;
+          animation: fadeIn 0.25s ease;
+        }
       `}</style>
 
-      <h1 className="disc-heading">Issues</h1>
-      <p className="disc-sub">Search issues you are interested in…</p>
+      <div className="page-header-block">
+        <h1 className="page-main-heading">Issues</h1>
+        <p className="page-main-subtext">Search issues you are interested in...</p>
+      </div>
 
-      <SearchForm onSubmit={search} isLoading={isLoading} prefill={prefill} />
+      <SearchForm
+        onSubmit={search}
+        isLoading={isLoading}
+        prefill={prefill}
+      />
 
       {error && (
         <ErrorMessage
@@ -97,43 +169,48 @@ export default function DiscoverPage({ searchQuery, connectedRepo }) {
         />
       )}
 
-      {isLoading && <LoadingState />}
+      {isLoading && <LoadingState message="Analyzing repository & finding suitable issues..." />}
 
       {hasSearched && !isLoading && !error && (
-        <>
+        <div className="results-container">
           {recommendations.length > 0 && (
             <FilterPanel
               filters={filters}
               onChange={setFilters}
               availableLabels={availableLabels}
+              availableLanguages={availableLanguages}
             />
           )}
-          {filtered.length > 0 ? (
+
+          {filteredIssues.length > 0 ? (
             <>
               <ResultsHeader
-                count={filtered.length}
+                count={filteredIssues.length}
                 username={lastSearch?.username}
                 repository={lastSearch ? `${lastSearch.owner}/${lastSearch.repo}` : ''}
               />
-              {useTable ? (
-                <IssueTable recommendations={filtered} />
+              {showTableView ? (
+                <IssueTable recommendations={filteredIssues} />
               ) : (
-                <IssueList recommendations={filtered} />
+                <IssueList recommendations={filteredIssues} />
               )}
             </>
           ) : (
             <EmptyState
-              title={recommendations.length > 0 ? 'No issues match your filters' : undefined}
+              title={
+                recommendations.length > 0
+                  ? 'No issues match your current filters'
+                  : 'No suitable issues found'
+              }
               description={
                 recommendations.length > 0
-                  ? 'Try adjusting or resetting the filters.'
-                  : undefined
+                  ? 'Try adjusting or clearing your active filters to see more recommendations.'
+                  : 'No suitable issues found for this search. Try another repository or contributor profile.'
               }
             />
           )}
-        </>
+        </div>
       )}
     </>
   )
 }
-
