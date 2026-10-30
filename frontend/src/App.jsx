@@ -5,8 +5,10 @@ import DiscoverPage from './pages/DiscoverPage'
 import LeaderboardPage from './pages/LeaderboardPage'
 import RepositoryConnectPanel from './components/RepositoryConnectPanel'
 import TrendingTodayPanel from './components/TrendingTodayPanel'
+import { AuthProvider } from './context/AuthContext'
+import AuthGuard from './components/auth/AuthGuard'
 
-function App() {
+function Dashboard() {
   const [activeTab, setActiveTab] = useState('discover')
   const [theme, setTheme] = useState('dark')
   const [searchQuery, setSearchQuery] = useState('')
@@ -22,7 +24,9 @@ function App() {
   }
 
   return (
-    <div className="app">
+    <div className="app-root">
+      <div className="ambient-glow" aria-hidden="true" />
+
       <AppHeader
         activeTab={activeTab}
         onTabChange={setActiveTab}
@@ -32,13 +36,13 @@ function App() {
         onSearchChange={setSearchQuery}
       />
 
-      <main className="app-main">
+      <main className="app-container">
         <div
-          className={`dashboard-container${
-            activeTab === 'leaderboard' ? ' full-width' : ''
+          className={`dashboard-grid${
+            activeTab === 'leaderboard' ? ' single-column' : ''
           }`}
         >
-          <div className="content-column">
+          <div className="main-column">
             {activeTab === 'discover' ? (
               <DiscoverPage
                 searchQuery={searchQuery}
@@ -58,6 +62,16 @@ function App() {
         </div>
       </main>
     </div>
+  )
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AuthGuard>
+        <Dashboard />
+      </AuthGuard>
+    </AuthProvider>
   )
 }
 

@@ -1,127 +1,232 @@
-import { ExternalLink, Hash } from 'lucide-react'
+import { ExternalLink, Hash, Sparkles, FolderGit2 } from 'lucide-react'
 import ScoreBadge from './ScoreBadge'
 import DifficultyBadge from './DifficultyBadge'
 import { isValidGitHubIssueUrl } from '../utils/formatters'
 
 export default function IssueCard({ issue }) {
   const {
-    number, title, quality_score, skill_match, final_score,
-    difficulty, reason, url, labels = [], repository, state, languages,
+    number,
+    title,
+    quality_score,
+    skill_match,
+    final_score,
+    difficulty,
+    reason,
+    url,
+    labels = [],
+    repository,
+    state = 'open',
+    languages = [],
   } = issue
 
   const safeUrl = isValidGitHubIssueUrl(url) ? url : null
+  const isOpen = (state || 'open').toLowerCase() === 'open'
 
   return (
     <>
       <style>{`
-        .issue-card {
+        .bento-issue-card {
           background: var(--surface);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
           border: 1px solid var(--border);
-          border-radius: var(--radius);
-          padding: 20px;
+          border-radius: var(--radius-lg);
+          padding: 22px;
           display: flex;
           flex-direction: column;
-          gap: 14px;
-          transition: border-color 0.15s, transform 0.15s;
-          animation: fadeIn 0.2s ease;
+          gap: 16px;
+          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow: var(--shadow-card);
+          position: relative;
         }
-        .issue-card:hover { border-color: var(--primary); transform: translateY(-1px); }
-        .ic-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-        .ic-title-group { flex: 1; min-width: 0; }
-        .ic-number {
-          display: inline-flex; align-items: center; gap: 3px;
-          font-size: 12px; color: var(--muted); margin-bottom: 5px;
+
+        .bento-issue-card:hover {
+          border-color: var(--border-accent);
+          transform: translateY(-2px);
+          box-shadow: var(--shadow-glow), var(--shadow-card);
         }
-        .ic-state {
-          margin-left: 8px; padding: 1px 7px; border-radius: 20px;
-          font-size: 10px; font-weight: 700; text-transform: uppercase;
+
+        .card-header-bar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
         }
-        .ic-state-open { background: var(--success-muted); color: var(--success); }
-        .ic-state-closed { background: var(--border); color: var(--muted); }
-        .ic-title { font-size: 15px; font-weight: 600; color: var(--text); line-height: 1.45; word-break: break-word; }
-        .ic-repo { font-size: 12px; color: var(--muted); margin-top: 4px; }
-        .ic-tags { display: flex; flex-wrap: wrap; gap: 6px; }
-        .ic-label {
-          display: inline-block; padding: 2px 8px; border-radius: 20px;
-          font-size: 11px; font-weight: 500; white-space: nowrap;
+
+        .card-state-beacon {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          padding: 2px 8px;
+          border-radius: 9999px;
+          font-size: 11px;
+          font-weight: 700;
+          text-transform: capitalize;
         }
-        .ic-label-default { background: var(--primary-muted); color: var(--primary); border: 1px solid rgba(91,140,255,0.2); }
-        .ic-label-lang { background: var(--warning-muted); color: var(--warning); border: 1px solid rgba(242,184,75,0.2); }
-        .ic-scores {
-          display: flex; gap: 24px;
-          padding: 14px 0;
-          border-top: 1px solid var(--border-light);
-          border-bottom: 1px solid var(--border-light);
+
+        .card-state-beacon.open {
+          background: var(--success-bg);
+          color: var(--success);
+          border: 1px solid var(--success-border);
         }
-        .ic-reason { font-size: 13px; color: var(--muted); line-height: 1.6; }
-        .ic-reason strong { color: var(--text); font-weight: 600; }
-        .ic-footer { display: flex; align-items: center; justify-content: flex-end; }
-        .view-gh-btn {
-          display: inline-flex; align-items: center; gap: 6px;
-          background: var(--primary-muted); color: var(--primary);
-          border: 1px solid rgba(91,140,255,0.25); border-radius: var(--radius-sm);
-          padding: 8px 16px; font-size: 13px; font-weight: 600;
-          text-decoration: none; transition: background 0.15s, border-color 0.15s;
+
+        .card-state-beacon.closed {
+          background: rgba(255, 255, 255, 0.05);
+          color: var(--text-muted);
+          border: 1px solid var(--border);
         }
-        .view-gh-btn:hover { background: rgba(91,140,255,0.22); border-color: var(--primary); }
+
+        .card-beacon-dot {
+          width: 5px;
+          height: 5px;
+          border-radius: 50%;
+          background: currentColor;
+        }
+
+        .card-issue-identity {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .card-num-repo {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 12px;
+          color: var(--text-muted);
+          font-family: 'JetBrains Mono', monospace;
+        }
+
+        .card-issue-title {
+          font-size: 16px;
+          font-weight: 700;
+          color: var(--text);
+          line-height: 1.45;
+          letter-spacing: -0.015em;
+        }
+
+        .card-tags-cloud {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 5px;
+        }
+
+        .card-label-chip {
+          font-size: 11px;
+          font-weight: 500;
+          padding: 2px 8px;
+          border-radius: 6px;
+          background: rgba(255, 255, 255, 0.04);
+          color: var(--text-muted);
+          border: 1px solid var(--border);
+        }
+
+        .card-scores-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 14px;
+          background: var(--surface-card);
+          border: 1px solid var(--border-subtle);
+          border-radius: var(--radius-sm);
+        }
+
+        .card-reason-box {
+          font-size: 12.5px;
+          color: var(--text-muted);
+          line-height: 1.55;
+          padding: 10px 12px;
+          background: rgba(99, 102, 241, 0.04);
+          border-left: 3px solid var(--primary);
+          border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+        }
+
+        .card-footer-action {
+          margin-top: auto;
+          display: flex;
+          justify-content: flex-end;
+        }
+
+        .card-view-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 16px;
+          border-radius: var(--radius-sm);
+          font-size: 13px;
+          font-weight: 700;
+          background: var(--primary-gradient);
+          color: #ffffff;
+          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+          transition: all 0.2s ease;
+          text-decoration: none;
+        }
+
+        .card-view-btn:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 6px 16px rgba(99, 102, 241, 0.45);
+        }
       `}</style>
-      <article className="issue-card">
-        <div className="ic-top">
-          <div className="ic-title-group">
-            <div className="ic-number">
-              <Hash size={11} />
-              {number}
-              {state && (
-                <span className={`ic-state ic-state-${state === 'open' ? 'open' : 'closed'}`}>
-                  {state}
-                </span>
-              )}
-            </div>
-            <p className="ic-title">{title}</p>
-            {repository && <p className="ic-repo">{repository}</p>}
-          </div>
+
+      <article className="bento-issue-card">
+        <div className="card-header-bar">
+          <span className={`card-state-beacon ${isOpen ? 'open' : 'closed'}`}>
+            <span className="card-beacon-dot" />
+            {isOpen ? 'Open Issue' : 'Closed'}
+          </span>
+
           <DifficultyBadge difficulty={difficulty} />
         </div>
 
+        <div className="card-issue-identity">
+          <div className="card-num-repo">
+            <span>#{number}</span>
+            <span>•</span>
+            <span>{repository}</span>
+          </div>
+          <h3 className="card-issue-title">{title}</h3>
+        </div>
+
         {labels.length > 0 && (
-          <div className="ic-tags">
-            {labels.map((l, i) => (
-              <span key={i} className="ic-label ic-label-default">{l}</span>
+          <div className="card-tags-cloud">
+            {labels.map((lbl, idx) => (
+              <span key={idx} className="card-label-chip">
+                {lbl}
+              </span>
             ))}
           </div>
         )}
 
-        {languages && languages.length > 0 && (
-          <div className="ic-tags">
-            {languages.map((l, i) => (
-              <span key={i} className="ic-label ic-label-lang">{l}</span>
-            ))}
-          </div>
-        )}
-
-        <div className="ic-scores">
-          <ScoreBadge score={quality_score} label="Quality" />
-          <ScoreBadge score={skill_match} label="Skill Match" />
-          <ScoreBadge score={final_score} label="Final Score" />
+        <div className="card-scores-row">
+          <ScoreBadge score={quality_score} label="Quality" size="small" />
+          <ScoreBadge score={skill_match} label="Skill Match" size="small" />
+          <ScoreBadge score={final_score} label="Overall Match" size="small" />
         </div>
 
         {reason && (
-          <p className="ic-reason">
-            <strong>Why this fits: </strong>{reason}
-          </p>
+          <div className="card-reason-box">
+            <strong>Why it fits: </strong>
+            <span>{reason}</span>
+          </div>
         )}
 
-        <div className="ic-footer">
+        <div className="card-footer-action">
           {safeUrl ? (
-            <a href={safeUrl} target="_blank" rel="noreferrer" className="view-gh-btn">
-              View on GitHub <ExternalLink size={13} />
+            <a
+              href={safeUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="card-view-btn"
+            >
+              <span>View on GitHub</span>
+              <ExternalLink size={13} />
             </a>
           ) : (
-            <span style={{ fontSize: 12, color: 'var(--muted)' }}>No link available</span>
+            <span style={{ fontSize: 12, color: 'var(--text-subtle)' }}>No URL available</span>
           )}
         </div>
       </article>
     </>
   )
 }
-

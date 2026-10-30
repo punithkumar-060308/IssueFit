@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { GitBranch, Star, Code2, AlertCircle, ArrowUpRight } from 'lucide-react'
+import { GitBranch, Star, Code2, AlertCircle, LayoutGrid, ListFilter, SlidersHorizontal, Sparkles, Radio } from 'lucide-react'
 import SearchForm from '../components/SearchForm'
 import FilterPanel, { DEFAULT_FILTERS } from '../components/FilterPanel'
 import IssueTable from '../components/IssueTable'
-import IssueList from '../components/IssueList'
+import IssueCard from '../components/IssueCard'
 import ResultsHeader from '../components/ResultsHeader'
 import LoadingState from '../components/LoadingState'
 import EmptyState from '../components/EmptyState'
@@ -25,7 +25,6 @@ function useWindowWidth() {
 function filterRecommendations(list, filters, searchQuery) {
   let result = [...list]
 
-  // Global search filtering
   if (searchQuery && searchQuery.trim()) {
     const q = searchQuery.trim().toLowerCase()
     result = result.filter(
@@ -37,7 +36,6 @@ function filterRecommendations(list, filters, searchQuery) {
     )
   }
 
-  // Difficulty filter
   if (filters.difficulty) {
     result = result.filter(
       (issue) =>
@@ -45,30 +43,25 @@ function filterRecommendations(list, filters, searchQuery) {
     )
   }
 
-  // Label filter
   if (filters.label) {
     result = result.filter((issue) =>
       issue.labels?.some((l) => l.toLowerCase() === filters.label.toLowerCase())
     )
   }
 
-  // Language filter
   if (filters.language) {
     result = result.filter((issue) =>
       issue.languages?.some((lang) => lang.toLowerCase() === filters.language.toLowerCase())
     )
   }
 
-  // Min Score filter
   if (filters.minScore > 0) {
     result = result.filter((issue) => Number(issue.final_score) >= filters.minScore)
   }
 
-  // Sort filter
   if (filters.sort === 'recent') {
     result = result.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0))
   } else {
-    // Best match default
     result = result.sort((a, b) => Number(b.final_score || 0) - Number(a.final_score || 0))
   }
 
@@ -87,6 +80,7 @@ export default function DiscoverPage({ searchQuery, connectedRepo }) {
 
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [prefill, setPrefill] = useState(null)
+  const [viewMode, setViewMode] = useState('table') // 'table' | 'grid'
   const windowWidth = useWindowWidth()
   const prevConnectedRepo = useRef(null)
 
@@ -120,65 +114,113 @@ export default function DiscoverPage({ searchQuery, connectedRepo }) {
     return filterRecommendations(recommendations, filters, searchQuery)
   }, [recommendations, filters, searchQuery])
 
-  const showTableView = windowWidth >= 960
+  const effectiveView = windowWidth < 960 ? 'grid' : viewMode
 
   return (
     <>
       <style>{`
-        .page-header-block {
+        .discover-hero-header {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
           margin-bottom: 24px;
+          gap: 16px;
+          flex-wrap: wrap;
         }
 
-        .page-main-heading {
-          font-size: 28px;
+        .hero-title-unit {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+
+        .hero-headline {
+          font-size: 32px;
           font-weight: 800;
           color: var(--text);
-          letter-spacing: -0.03em;
-          margin-bottom: 6px;
+          letter-spacing: -0.035em;
+          line-height: 1.15;
         }
 
-        .page-main-subtext {
-          font-size: 14px;
-          color: var(--muted);
-          line-height: 1.5;
+        .hero-subheadline {
+          font-size: 14.5px;
+          color: var(--text-muted);
         }
 
-        .connected-repo-banner {
-          background: var(--surface);
-          border: 1px solid var(--primary-border);
-          border-left: 4px solid var(--primary);
+        .view-switcher-bar {
+          display: flex;
+          align-items: center;
+          background: var(--surface-card);
+          border: 1px solid var(--border);
           border-radius: var(--radius-sm);
-          padding: 14px 18px;
+          padding: 3px;
+          gap: 2px;
+        }
+
+        .view-toggle-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 12px;
+          border-radius: var(--radius-xs);
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--text-muted);
+          background: transparent;
+          border: none;
+          transition: all 0.15s ease;
+          cursor: pointer;
+        }
+
+        .view-toggle-btn:hover {
+          color: var(--text);
+        }
+
+        .view-toggle-btn.active {
+          color: #ffffff;
+          background: var(--primary);
+          box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+        }
+
+        /* Connected Banner */
+        .connected-hero-banner {
+          background: var(--surface);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid var(--border-accent);
+          border-radius: var(--radius-lg);
+          padding: 16px 20px;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 16px;
+          gap: 20px;
           flex-wrap: wrap;
-          margin-bottom: 20px;
+          margin-bottom: 24px;
+          box-shadow: var(--shadow-glow);
         }
 
-        .connected-repo-details {
+        .connected-info-box {
           display: flex;
           flex-direction: column;
           gap: 3px;
         }
 
-        .connected-repo-title {
-          font-size: 14px;
-          font-weight: 700;
+        .connected-title {
+          font-size: 15px;
+          font-weight: 800;
           color: var(--text);
           display: flex;
           align-items: center;
           gap: 8px;
         }
 
-        .connected-repo-desc {
-          font-size: 12px;
-          color: var(--muted);
-          max-width: 600px;
+        .connected-desc {
+          font-size: 12.5px;
+          color: var(--text-muted);
+          max-width: 650px;
         }
 
-        .connected-repo-metrics {
+        .connected-stats-chips {
           display: flex;
           align-items: center;
           gap: 12px;
@@ -186,55 +228,74 @@ export default function DiscoverPage({ searchQuery, connectedRepo }) {
           color: var(--text-secondary);
         }
 
-        .connected-metric-item {
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-        }
-
-        .results-container {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-          margin-top: 12px;
-          animation: fadeIn 0.25s ease;
+        .results-bento-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+          gap: 20px;
         }
       `}</style>
 
-      <div className="page-header-block">
-        <h1 className="page-main-heading">Issues</h1>
-        <p className="page-main-subtext">Search issues you are interested in...</p>
+      <div className="discover-hero-header">
+        <div className="hero-title-unit">
+          <h1 className="hero-headline">Issue Discovery Radar</h1>
+          <p className="hero-subheadline">
+            Explore curated issues analyzed and ranked against contributor skill profiles.
+          </p>
+        </div>
+
+        {hasSearched && filteredIssues.length > 0 && (
+          <div className="view-switcher-bar">
+            <button
+              type="button"
+              className={`view-toggle-btn${effectiveView === 'table' ? ' active' : ''}`}
+              onClick={() => setViewMode('table')}
+              aria-label="Table View"
+            >
+              <ListFilter size={14} />
+              <span>Table</span>
+            </button>
+            <button
+              type="button"
+              className={`view-toggle-btn${effectiveView === 'grid' ? ' active' : ''}`}
+              onClick={() => setViewMode('grid')}
+              aria-label="Bento Grid View"
+            >
+              <LayoutGrid size={14} />
+              <span>Bento</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {connectedRepo?.metadata && (
-        <div className="connected-repo-banner" role="status">
-          <div className="connected-repo-details">
-            <div className="connected-repo-title">
-              <GitBranch size={16} style={{ color: 'var(--primary)' }} />
+        <div className="connected-hero-banner" role="status">
+          <div className="connected-info-box">
+            <div className="connected-title">
+              <GitBranch size={17} style={{ color: 'var(--primary)' }} />
               <span>Connected: {connectedRepo.metadata.full_name || `${connectedRepo.owner}/${connectedRepo.repo}`}</span>
             </div>
             {connectedRepo.metadata.description && (
-              <p className="connected-repo-desc">{connectedRepo.metadata.description}</p>
+              <p className="connected-desc">{connectedRepo.metadata.description}</p>
             )}
           </div>
 
-          <div className="connected-repo-metrics">
+          <div className="connected-stats-chips">
             {connectedRepo.metadata.language && (
-              <span className="connected-metric-item">
-                <Code2 size={13} style={{ color: 'var(--warning)' }} />
-                {connectedRepo.metadata.language}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <Code2 size={13} style={{ color: 'var(--accent-cyan)' }} />
+                <strong>{connectedRepo.metadata.language}</strong>
               </span>
             )}
             {connectedRepo.metadata.stargazers_count !== undefined && (
-              <span className="connected-metric-item">
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                 <Star size={13} style={{ color: 'var(--warning)' }} />
-                {connectedRepo.metadata.stargazers_count.toLocaleString()} stars
+                <span>{connectedRepo.metadata.stargazers_count.toLocaleString()} stars</span>
               </span>
             )}
             {connectedRepo.metadata.open_issues_count !== undefined && (
-              <span className="connected-metric-item">
-                <AlertCircle size={13} style={{ color: 'var(--success)' }} />
-                {connectedRepo.metadata.open_issues_count.toLocaleString()} open issues
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Radio size={13} style={{ color: 'var(--success)' }} />
+                <span>{connectedRepo.metadata.open_issues_count} open issues</span>
               </span>
             )}
           </div>
@@ -254,10 +315,12 @@ export default function DiscoverPage({ searchQuery, connectedRepo }) {
         />
       )}
 
-      {isLoading && <LoadingState message="Analyzing repository & finding suitable issues..." />}
+      {isLoading && (
+        <LoadingState message="Analyzing repository issues & generating suitabilities..." />
+      )}
 
       {hasSearched && !isLoading && !error && (
-        <div className="results-container">
+        <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
           {recommendations.length > 0 && (
             <FilterPanel
               filters={filters}
@@ -274,10 +337,15 @@ export default function DiscoverPage({ searchQuery, connectedRepo }) {
                 username={lastSearch?.username}
                 repository={lastSearch ? `${lastSearch.owner}/${lastSearch.repo}` : ''}
               />
-              {showTableView ? (
+
+              {effectiveView === 'table' ? (
                 <IssueTable recommendations={filteredIssues} />
               ) : (
-                <IssueList recommendations={filteredIssues} />
+                <div className="results-bento-grid">
+                  {filteredIssues.map((issue, idx) => (
+                    <IssueCard key={issue.number || idx} issue={issue} />
+                  ))}
+                </div>
               )}
             </>
           ) : (
@@ -289,7 +357,7 @@ export default function DiscoverPage({ searchQuery, connectedRepo }) {
               }
               description={
                 recommendations.length > 0
-                  ? 'Try adjusting or clearing your active filters to see more recommendations.'
+                  ? 'Try relaxing your filter parameters to view more recommendations.'
                   : 'No suitable issues found for this search. Try another repository or contributor profile.'
               }
             />

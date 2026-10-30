@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { TrendingUp, ExternalLink, Activity } from 'lucide-react'
+import { TrendingUp, ExternalLink, Activity, Flame, Compass } from 'lucide-react'
 import { getTrending } from '../services/issuefitApi'
 
 export default function TrendingTodayPanel() {
@@ -28,74 +28,89 @@ export default function TrendingTodayPanel() {
   return (
     <>
       <style>{`
-        .trending-panel-card {
+        .trending-station-card {
           background: var(--surface);
+          backdrop-filter: blur(24px);
+          -webkit-backdrop-filter: blur(24px);
           border: 1px solid var(--border);
-          border-radius: var(--radius-md);
-          padding: 22px;
-          box-shadow: var(--shadow-sm);
+          border-radius: var(--radius-xl);
+          padding: 24px;
+          box-shadow: var(--shadow-glass);
         }
 
-        .trending-header {
+        .trending-header-row {
           display: flex;
           align-items: center;
-          justify-content: space-between;
-          margin-bottom: 16px;
+          gap: 10px;
+          margin-bottom: 18px;
         }
 
-        .trending-title {
-          font-size: 15px;
-          font-weight: 700;
-          color: var(--text);
+        .trending-badge-icon {
+          width: 32px;
+          height: 32px;
+          border-radius: var(--radius-sm);
+          background: rgba(245, 158, 11, 0.12);
+          border: 1px solid rgba(245, 158, 11, 0.3);
           display: flex;
           align-items: center;
-          gap: 8px;
-        }
-
-        .trending-icon {
+          justify-content: center;
           color: var(--warning);
         }
 
-        .trending-list {
+        .trending-main-title {
+          font-size: 15px;
+          font-weight: 800;
+          color: var(--text);
+          letter-spacing: -0.01em;
+        }
+
+        .trending-items-list {
           list-style: none;
           display: flex;
           flex-direction: column;
           gap: 0;
         }
 
-        .trending-list-item {
+        .trending-row-entry {
           display: flex;
           align-items: flex-start;
           gap: 12px;
           padding: 12px 0;
-          border-bottom: 1px solid var(--border-light);
+          border-bottom: 1px solid var(--border);
         }
 
-        .trending-list-item:first-child {
+        .trending-row-entry:first-child {
           padding-top: 0;
         }
 
-        .trending-list-item:last-child {
+        .trending-row-entry:last-child {
           border-bottom: none;
           padding-bottom: 0;
         }
 
-        .trending-rank-num {
-          font-size: 12px;
-          font-weight: 700;
-          color: var(--muted);
-          min-width: 18px;
-          padding-top: 1px;
+        .rank-glow-num {
+          font-size: 11px;
+          font-weight: 800;
+          color: var(--primary);
+          background: var(--primary-muted);
+          width: 20px;
+          height: 20px;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-top: 2px;
+          flex-shrink: 0;
         }
 
-        .trending-item-content {
+        .trending-entry-meta {
           flex: 1;
           min-width: 0;
         }
 
-        .trending-item-link {
+        .trending-entry-link {
           font-size: 13px;
-          font-weight: 600;
+          font-weight: 700;
           color: var(--text);
           display: inline-flex;
           align-items: center;
@@ -105,36 +120,43 @@ export default function TrendingTodayPanel() {
           word-break: break-all;
         }
 
-        .trending-item-link:hover {
+        .trending-entry-link:hover {
           color: var(--primary);
         }
 
-        .trending-item-desc {
-          font-size: 12px;
-          color: var(--muted);
-          margin-top: 3px;
+        .trending-entry-desc {
+          font-size: 11.5px;
+          color: var(--text-muted);
+          margin-top: 2px;
           line-height: 1.4;
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
         }
 
-        .trending-empty-state {
-          padding: 24px 8px;
+        .trending-radar-empty {
+          padding: 24px 10px;
           text-align: center;
-          color: var(--muted);
-          font-size: 13px;
-          line-height: 1.5;
+          color: var(--text-muted);
+          font-size: 12.5px;
+          line-height: 1.55;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 10px;
         }
 
-        .trending-empty-icon {
-          color: var(--muted);
-          opacity: 0.35;
-          margin: 0 auto 10px auto;
+        .radar-sweep-icon {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          border: 1px solid var(--border-accent);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--primary);
+          background: var(--primary-muted);
+          box-shadow: 0 0 16px var(--primary-glow);
         }
 
-        .trending-loading-spinner {
+        .trending-spinner-ring {
           width: 24px;
           height: 24px;
           border: 2px solid var(--border);
@@ -145,38 +167,45 @@ export default function TrendingTodayPanel() {
         }
       `}</style>
 
-      <div className="trending-panel-card">
-        <div className="trending-header">
-          <h3 className="trending-title">
-            <TrendingUp size={17} className="trending-icon" />
-            <span>Trending today</span>
-          </h3>
+      <div className="trending-station-card">
+        <div className="trending-header-row">
+          <div className="trending-badge-icon">
+            <Flame size={17} />
+          </div>
+          <h3 className="trending-main-title">Trending Today</h3>
         </div>
 
         {isLoading ? (
-          <div className="trending-loading-spinner" aria-label="Loading trending issues" />
+          <div className="trending-spinner-ring" aria-label="Loading trends" />
         ) : !items || items.length === 0 ? (
-          <div className="trending-empty-state">
-            <Activity size={28} className="trending-empty-icon" />
-            <p>Trending issues will appear here when data is available.</p>
+          <div className="trending-radar-empty">
+            <div className="radar-sweep-icon">
+              <Compass size={20} />
+            </div>
+            <div>
+              <strong style={{ color: 'var(--text)', display: 'block', marginBottom: 2 }}>
+                Radar Standing By
+              </strong>
+              <span>Trending issues will stream in as repository activity increases.</span>
+            </div>
           </div>
         ) : (
-          <ul className="trending-list">
+          <ul className="trending-items-list">
             {items.slice(0, 5).map((item, idx) => (
-              <li key={idx} className="trending-list-item">
-                <span className="trending-rank-num">#{idx + 1}</span>
-                <div className="trending-item-content">
+              <li key={idx} className="trending-row-entry">
+                <span className="rank-glow-num">#{idx + 1}</span>
+                <div className="trending-entry-meta">
                   <a
                     href={item.url || item.html_url || '#'}
                     target="_blank"
                     rel="noreferrer"
-                    className="trending-item-link"
+                    className="trending-entry-link"
                   >
                     <span>{item.name || item.full_name || item.title}</span>
                     <ExternalLink size={11} style={{ flexShrink: 0 }} />
                   </a>
                   {item.description && (
-                    <p className="trending-item-desc">{item.description}</p>
+                    <p className="trending-entry-desc">{item.description}</p>
                   )}
                 </div>
               </li>

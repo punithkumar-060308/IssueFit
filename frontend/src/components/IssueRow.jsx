@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ExternalLink, Hash, ChevronDown, ChevronUp, Sparkles, CheckCircle2 } from 'lucide-react'
+import { ExternalLink, Hash, ChevronDown, ChevronUp, Sparkles, FolderGit2 } from 'lucide-react'
 import ScoreBadge from './ScoreBadge'
 import DifficultyBadge from './DifficultyBadge'
 import { isValidGitHubIssueUrl } from '../utils/formatters'
@@ -28,332 +28,364 @@ export default function IssueRow({ issue }) {
   return (
     <>
       <style>{`
-        .issue-row-main {
+        .table-row-item {
           transition: background-color 0.15s ease;
           cursor: pointer;
         }
 
-        .issue-row-main:hover {
+        .table-row-item:hover {
           background-color: var(--surface-hover);
         }
 
-        .issue-row-main.is-expanded {
+        .table-row-item.row-active {
           background-color: var(--surface-hover);
           border-bottom-color: transparent !important;
         }
 
-        .table-cell {
+        .row-cell {
           padding: 14px 16px;
           border-bottom: 1px solid var(--border);
           vertical-align: middle;
           font-size: 13px;
+          box-sizing: border-box;
+          overflow: hidden;
         }
 
-        /* State Badge */
-        .state-badge {
+        /* Status Beacon */
+        .state-beacon {
           display: inline-flex;
           align-items: center;
-          gap: 5px;
+          gap: 6px;
           padding: 3px 9px;
-          border-radius: 20px;
+          border-radius: 9999px;
           font-size: 11px;
-          font-weight: 600;
+          font-weight: 700;
           text-transform: capitalize;
           white-space: nowrap;
         }
 
-        .state-badge.open {
-          background: var(--success-muted);
+        .state-beacon.open {
+          background: var(--success-bg);
           color: var(--success);
           border: 1px solid var(--success-border);
         }
 
-        .state-badge.closed {
-          background: var(--tag-bg);
-          color: var(--muted);
+        .state-beacon.closed {
+          background: rgba(255, 255, 255, 0.05);
+          color: var(--text-muted);
           border: 1px solid var(--border);
         }
 
-        .state-dot {
-          width: 6px;
-          height: 6px;
+        .beacon-dot {
+          width: 5px;
+          height: 5px;
           border-radius: 50%;
           background: currentColor;
+          box-shadow: 0 0 6px currentColor;
         }
 
-        /* Name & Title */
-        .issue-name-container {
+        /* Issue Name Container */
+        .issue-title-container {
           display: flex;
           align-items: flex-start;
           gap: 10px;
-          max-width: 360px;
+          width: 100%;
         }
 
-        .expand-toggle-btn {
-          background: none;
-          border: none;
-          color: var(--muted);
-          padding: 2px;
-          display: flex;
-          align-items: center;
-          margin-top: 2px;
+        .toggle-arrow {
+          background: var(--surface-card);
+          border: 1px solid var(--border);
+          color: var(--text-muted);
+          padding: 3px;
           border-radius: 4px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          margin-top: 1px;
+          flex-shrink: 0;
+          transition: all 0.2s ease;
         }
 
-        .issue-title-text {
+        .table-row-item:hover .toggle-arrow {
+          color: var(--primary);
+          border-color: var(--border-accent);
+        }
+
+        .issue-text-wrap {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .issue-num-badge {
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 11px;
+          color: var(--primary);
           font-weight: 600;
+          background: var(--primary-muted);
+          padding: 1px 6px;
+          border-radius: 4px;
+          margin-right: 6px;
+          display: inline-flex;
+          align-items: center;
+        }
+
+        .issue-title-heading {
+          font-weight: 700;
           color: var(--text);
-          line-height: 1.4;
+          line-height: 1.45;
+          letter-spacing: -0.01em;
           word-break: break-word;
         }
 
-        .issue-number-tag {
-          font-size: 11px;
-          color: var(--muted);
-          font-weight: 500;
-          display: inline-flex;
-          align-items: center;
-          gap: 1px;
-          margin-right: 6px;
-        }
-
-        /* Labels */
-        .labels-wrapper {
+        /* Label Pills */
+        .labels-collection {
           display: flex;
           flex-wrap: wrap;
-          gap: 5px;
-          max-width: 200px;
+          gap: 4px;
+          max-width: 100%;
         }
 
-        .label-pill {
+        .clean-label-pill {
           display: inline-block;
           padding: 2px 7px;
-          border-radius: 12px;
+          border-radius: 6px;
           font-size: 11px;
           font-weight: 500;
-          background: var(--tag-bg);
-          color: var(--text-secondary);
+          background: rgba(255, 255, 255, 0.04);
+          color: var(--text-muted);
           border: 1px solid var(--border);
           white-space: nowrap;
+          max-width: 130px;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
-        /* Repository */
-        .repo-link {
+        /* Repo Link */
+        .repo-badge-cell {
+          font-family: 'JetBrains Mono', monospace;
           font-size: 12px;
-          color: var(--text-secondary);
-          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+          color: var(--text-muted);
           white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          display: block;
         }
 
         /* Languages */
-        .language-tags {
+        .lang-pills-row {
           display: flex;
           flex-wrap: wrap;
           gap: 4px;
         }
 
-        .lang-pill {
+        .lang-pill-item {
           display: inline-flex;
           align-items: center;
           gap: 5px;
           font-size: 11px;
-          font-weight: 500;
-          color: var(--warning);
-          background: var(--warning-muted);
-          border: 1px solid var(--warning-border);
-          border-radius: 12px;
-          padding: 2px 7px;
+          font-weight: 600;
+          color: var(--accent-cyan);
+          background: rgba(6, 182, 212, 0.1);
+          border: 1px solid rgba(6, 182, 212, 0.25);
+          border-radius: 9999px;
+          padding: 2px 8px;
           white-space: nowrap;
         }
 
-        .lang-dot {
+        .lang-dot-bullet {
           width: 5px;
           height: 5px;
           border-radius: 50%;
           background: currentColor;
         }
 
-        /* Match Score Cell */
-        .score-cell {
-          text-align: center;
-          min-width: 80px;
-        }
-
-        /* Action */
-        .open-action-btn {
+        /* Action View Button */
+        .action-inspect-btn {
           display: inline-flex;
           align-items: center;
+          justify-content: center;
           gap: 5px;
           padding: 6px 12px;
           border-radius: var(--radius-sm);
           font-size: 12px;
-          font-weight: 600;
-          background: var(--primary-muted);
-          color: var(--primary);
-          border: 1px solid var(--primary-border);
+          font-weight: 700;
+          background: var(--surface-card);
+          color: var(--text);
+          border: 1px solid var(--border);
           text-decoration: none;
-          transition: all 0.15s ease;
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
           white-space: nowrap;
         }
 
-        .open-action-btn:hover {
+        .action-inspect-btn:hover {
           background: var(--primary);
           color: #ffffff;
-          box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+          border-color: var(--primary);
+          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
         }
 
-        /* Expanded Details Row */
-        .expanded-row td {
+        /* Expanded Inspection Drawer */
+        .expanded-details-container td {
           padding: 0 16px 18px 16px;
           background-color: var(--surface-hover);
           border-bottom: 1px solid var(--border);
         }
 
-        .details-card {
-          background: var(--surface-card);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-sm);
-          padding: 16px;
+        .inspection-glass-panel {
+          background: var(--surface-solid);
+          border: 1px solid var(--border-bright);
+          border-radius: var(--radius);
+          padding: 18px 20px;
           display: flex;
           flex-direction: column;
           gap: 14px;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
         }
 
-        .details-scores-bar {
+        .inspection-metrics-header {
           display: flex;
           align-items: center;
-          gap: 24px;
+          gap: 20px;
+          flex-wrap: wrap;
           padding-bottom: 12px;
           border-bottom: 1px solid var(--border);
+        }
+
+        .score-gauges-cluster {
+          display: flex;
+          align-items: center;
+          gap: 20px;
           flex-wrap: wrap;
         }
 
-        .details-reason-box {
+        .ai-reason-drawer {
           display: flex;
           align-items: flex-start;
-          gap: 10px;
+          gap: 12px;
+          padding: 12px 16px;
+          border-radius: var(--radius-sm);
+          background: rgba(99, 102, 241, 0.06);
+          border: 1px solid rgba(99, 102, 241, 0.2);
+          color: var(--text);
           font-size: 13px;
-          line-height: 1.6;
-          color: var(--text-secondary);
+          line-height: 1.55;
         }
 
-        .reason-icon {
+        .ai-spark-icon {
           color: var(--primary);
           flex-shrink: 0;
-          margin-top: 3px;
+          margin-top: 2px;
         }
       `}</style>
 
       <tr
-        className={`issue-row-main${expanded ? ' is-expanded' : ''}`}
+        className={`table-row-item${expanded ? ' row-active' : ''}`}
         onClick={() => setExpanded(!expanded)}
       >
-        <td className="table-cell">
-          <span className={`state-badge ${isOpen ? 'open' : 'closed'}`}>
-            <span className="state-dot" />
+        <td className="row-cell">
+          <span className={`state-beacon ${isOpen ? 'open' : 'closed'}`}>
+            <span className="beacon-dot" />
             {isOpen ? 'Open' : 'Closed'}
           </span>
         </td>
 
-        <td className="table-cell">
-          <div className="issue-name-container">
-            <button
-              type="button"
-              className="expand-toggle-btn"
-              aria-label={expanded ? 'Collapse details' : 'Expand details'}
-            >
-              {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-            </button>
-            <div>
-              <span className="issue-number-tag">
-                <Hash size={11} />
-                {number}
-              </span>
-              <span className="issue-title-text">{title}</span>
+        <td className="row-cell">
+          <div className="issue-title-container">
+            <span className="toggle-arrow">
+              {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            </span>
+            <div className="issue-text-wrap">
+              <span className="issue-num-badge">#{number}</span>
+              <span className="issue-title-heading">{title}</span>
             </div>
           </div>
         </td>
 
-        <td className="table-cell">
+        <td className="row-cell">
           {labels.length > 0 ? (
-            <div className="labels-wrapper">
-              {labels.slice(0, 3).map((lbl, idx) => (
-                <span key={idx} className="label-pill">
+            <div className="labels-collection">
+              {labels.slice(0, 2).map((lbl, idx) => (
+                <span key={idx} className="clean-label-pill" title={lbl}>
                   {lbl}
                 </span>
               ))}
-              {labels.length > 3 && (
-                <span className="label-pill" title={labels.slice(3).join(', ')}>
-                  +{labels.length - 3}
+              {labels.length > 2 && (
+                <span className="clean-label-pill" title={labels.slice(2).join(', ')}>
+                  +{labels.length - 2}
                 </span>
               )}
             </div>
           ) : (
-            <span style={{ color: 'var(--muted)', fontSize: 12 }}>—</span>
+            <span style={{ color: 'var(--text-subtle)', fontSize: 12 }}>—</span>
           )}
         </td>
 
-        <td className="table-cell">
-          <span className="repo-link">{repository || '—'}</span>
+        <td className="row-cell">
+          <span className="repo-badge-cell" title={repository}>
+            {repository || '—'}
+          </span>
         </td>
 
-        <td className="table-cell">
+        <td className="row-cell">
           {languages && languages.length > 0 ? (
-            <div className="language-tags">
+            <div className="lang-pills-row">
               {languages.map((lang, idx) => (
-                <span key={idx} className="lang-pill">
-                  <span className="lang-dot" />
+                <span key={idx} className="lang-pill-item">
+                  <span className="lang-dot-bullet" />
                   {lang}
                 </span>
               ))}
             </div>
           ) : (
-            <span style={{ color: 'var(--muted)', fontSize: 12 }}>—</span>
+            <span style={{ color: 'var(--text-subtle)', fontSize: 12 }}>—</span>
           )}
         </td>
 
-        <td className="table-cell score-cell">
-          <ScoreBadge score={final_score} label="Match" />
+        <td className="row-cell" style={{ textAlign: 'center' }}>
+          <ScoreBadge score={final_score} label="" />
         </td>
 
-        <td className="table-cell" onClick={(e) => e.stopPropagation()}>
+        <td className="row-cell" style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
           {safeUrl ? (
             <a
               href={safeUrl}
               target="_blank"
               rel="noreferrer"
-              className="open-action-btn"
+              className="action-inspect-btn"
             >
-              <span>View</span>
-              <ExternalLink size={12} />
+              <span>GitHub</span>
+              <ExternalLink size={11} />
             </a>
           ) : (
-            <span style={{ color: 'var(--muted)', fontSize: 12 }}>—</span>
+            <span style={{ color: 'var(--text-subtle)', fontSize: 12 }}>—</span>
           )}
         </td>
       </tr>
 
       {expanded && (
-        <tr className="expanded-row">
+        <tr className="expanded-details-container">
           <td colSpan={7}>
-            <div className="details-card">
-              <div className="details-scores-bar">
-                <ScoreBadge score={quality_score} label="Quality Score" />
-                <ScoreBadge score={skill_match} label="Skill Match" />
-                <ScoreBadge score={final_score} label="Overall Match" />
+            <div className="inspection-glass-panel">
+              <div className="inspection-metrics-header">
+                <div className="score-gauges-cluster">
+                  <ScoreBadge score={quality_score} label="Issue Quality" />
+                  <ScoreBadge score={skill_match} label="Skill Alignment" />
+                  <ScoreBadge score={final_score} label="Total Suitability" />
+                </div>
+
                 <div style={{ marginLeft: 'auto' }}>
                   <DifficultyBadge difficulty={difficulty} />
                 </div>
               </div>
 
               {reason && (
-                <div className="details-reason-box">
-                  <Sparkles size={16} className="reason-icon" />
+                <div className="ai-reason-drawer">
+                  <Sparkles size={16} className="ai-spark-icon" />
                   <div>
-                    <strong style={{ color: 'var(--text)', marginRight: 6 }}>
-                      Recommendation Analysis:
+                    <strong style={{ color: 'var(--primary)', marginRight: 6 }}>
+                      Suitability Analysis:
                     </strong>
-                    {reason}
+                    <span>{reason}</span>
                   </div>
                 </div>
               )}
@@ -364,4 +396,3 @@ export default function IssueRow({ issue }) {
     </>
   )
 }
-

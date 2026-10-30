@@ -4,6 +4,7 @@ const API_BASE_URL =
 export async function getRecommendations(payload) {
   const response = await fetch(`${API_BASE_URL}/api/recommend`, {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })

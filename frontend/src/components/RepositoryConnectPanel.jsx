@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { GitBranch, CheckCircle2, AlertCircle, ArrowRight, Link2, Star, Code2, Loader2, Sparkles } from 'lucide-react'
+import { GitBranch, CheckCircle2, AlertCircle, ArrowRight, Link2, Star, Code2, Loader2, GitFork, Radio } from 'lucide-react'
 import { parseGitHubRepoUrl } from '../utils/formatters'
 import { validateRepository } from '../services/issuefitApi'
 
 export default function RepositoryConnectPanel({ onRepoConnected }) {
   const [url, setUrl] = useState('')
   const [isValidating, setIsValidating] = useState(false)
-  const [status, setStatus] = useState(null) // null | 'success' | 'error'
+  const [status, setStatus] = useState(null)
   const [repoInfo, setRepoInfo] = useState(null)
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -18,7 +18,7 @@ export default function RepositoryConnectPanel({ onRepoConnected }) {
     if (!clientParsed) {
       setStatus('error')
       setErrorMessage(
-        'Please enter a valid public GitHub repository URL (e.g. github.com/fastapi/fastapi)'
+        'Please enter a valid GitHub repository URL (e.g. github.com/fastapi/fastapi)'
       )
       return
     }
@@ -28,7 +28,6 @@ export default function RepositoryConnectPanel({ onRepoConnected }) {
     setErrorMessage('')
 
     try {
-      // Validate with backend API endpoint /api/repository/validate
       const data = await validateRepository(url)
       const repo = data?.repository || {}
       setStatus('success')
@@ -63,213 +62,264 @@ export default function RepositoryConnectPanel({ onRepoConnected }) {
   return (
     <>
       <style>{`
-        .repo-connect-card {
+        .station-card {
           background: var(--surface);
+          backdrop-filter: blur(24px);
+          -webkit-backdrop-filter: blur(24px);
           border: 1px solid var(--border);
-          border-radius: var(--radius-md);
-          padding: 22px;
-          box-shadow: var(--shadow-sm);
-        }
-
-        .repo-connect-title {
-          font-size: 15px;
-          font-weight: 700;
-          color: var(--text);
-          margin-bottom: 6px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .repo-connect-desc {
-          font-size: 13px;
-          color: var(--muted);
-          margin-bottom: 16px;
-          line-height: 1.5;
-        }
-
-        .repo-connect-input-group {
+          border-radius: var(--radius-xl);
+          padding: 24px;
+          box-shadow: var(--shadow-glass);
           position: relative;
-          margin-bottom: 6px;
+          overflow: hidden;
         }
 
-        .repo-connect-input {
-          width: 100%;
-          height: 38px;
-          background: var(--bg);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-sm);
-          padding: 0 12px 0 34px;
-          font-size: 13px;
-          color: var(--text);
-          transition: border-color 0.15s ease, box-shadow 0.15s ease;
-        }
-
-        .repo-connect-input::placeholder {
-          color: var(--muted);
-          opacity: 0.65;
-        }
-
-        .repo-connect-input:focus {
-          outline: none;
-          border-color: var(--border-active);
-          box-shadow: 0 0 0 3px var(--primary-muted);
-        }
-
-        .repo-connect-input.error {
-          border-color: var(--danger);
-        }
-
-        .repo-input-icon {
-          position: absolute;
-          left: 10px;
-          top: 50%;
-          transform: translateY(-50%);
-          color: var(--muted);
-          pointer-events: none;
-        }
-
-        .repo-example-helper {
+        .station-header {
           display: flex;
           align-items: center;
-          gap: 6px;
-          font-size: 11px;
-          color: var(--muted);
-          margin-bottom: 12px;
-          flex-wrap: wrap;
+          gap: 10px;
+          margin-bottom: 8px;
         }
 
-        .example-chip-link {
-          background: var(--tag-bg);
-          border: 1px solid var(--border);
-          color: var(--primary);
-          padding: 1px 6px;
-          border-radius: 4px;
-          font-family: ui-monospace, monospace;
-          cursor: pointer;
-          font-size: 11px;
-        }
-
-        .example-chip-link:hover {
+        .station-icon-glow {
+          width: 32px;
+          height: 32px;
+          border-radius: var(--radius-sm);
           background: var(--primary-muted);
-          border-color: var(--primary-border);
-        }
-
-        .connect-action-btn {
-          width: 100%;
-          height: 38px;
+          border: 1px solid var(--border-accent);
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 6px;
-          background: var(--surface-2);
+          color: var(--primary);
+        }
+
+        .station-title {
+          font-size: 15px;
+          font-weight: 800;
+          color: var(--text);
+          letter-spacing: -0.01em;
+        }
+
+        .station-desc {
+          font-size: 13px;
+          color: var(--text-muted);
+          margin-bottom: 18px;
+          line-height: 1.5;
+        }
+
+        .station-input-wrap {
+          position: relative;
+          margin-bottom: 10px;
+        }
+
+        .station-input {
+          width: 100%;
+          height: 42px;
+          background: var(--surface-solid);
           border: 1px solid var(--border);
+          border-radius: var(--radius-sm);
+          padding: 0 14px 0 38px;
+          font-size: 13px;
+          color: var(--text);
+          transition: all 0.2s ease;
+        }
+
+        .station-input:focus {
+          outline: none;
+          border-color: var(--primary);
+          box-shadow: 0 0 0 3px var(--primary-glow);
+        }
+
+        .station-input.input-error {
+          border-color: var(--danger);
+        }
+
+        .station-input-ico {
+          position: absolute;
+          left: 12px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: var(--text-subtle);
+          pointer-events: none;
+        }
+
+        .station-example-row {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 11px;
+          color: var(--text-subtle);
+          margin-bottom: 16px;
+          flex-wrap: wrap;
+        }
+
+        .station-chip {
+          background: var(--surface-card);
+          border: 1px solid var(--border);
+          color: var(--primary);
+          padding: 2px 8px;
+          border-radius: 9999px;
+          font-family: 'JetBrains Mono', monospace;
+          cursor: pointer;
+          font-size: 11px;
+          font-weight: 600;
+          transition: all 0.15s ease;
+        }
+
+        .station-chip:hover {
+          background: var(--primary-muted);
+          border-color: var(--border-accent);
+        }
+
+        .station-action-btn {
+          width: 100%;
+          height: 42px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          background: var(--surface-card);
+          border: 1px solid var(--border-bright);
           color: var(--text);
           border-radius: var(--radius-sm);
           font-size: 13px;
-          font-weight: 600;
-          transition: all 0.15s ease;
+          font-weight: 700;
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
           cursor: pointer;
         }
 
-        .connect-action-btn:hover:not(:disabled) {
-          background: var(--primary);
+        .station-action-btn:hover:not(:disabled) {
+          background: var(--primary-gradient);
           color: #ffffff;
-          border-color: var(--primary);
-          box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+          border-color: transparent;
+          box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+          transform: translateY(-1px);
         }
 
-        .connect-action-btn:disabled {
+        .station-action-btn:disabled {
           opacity: 0.55;
           cursor: not-allowed;
         }
 
-        .repo-status-alert {
+        /* Holographic Repo Preview */
+        .holo-repo-card {
+          margin-top: 16px;
+          padding: 16px;
+          border-radius: var(--radius);
+          background: var(--surface-solid);
+          border: 1px solid var(--success-border);
+          box-shadow: 0 4px 16px rgba(16, 185, 129, 0.1);
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          animation: slideUpFade 0.25s ease;
+        }
+
+        .holo-title-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 14px;
+          font-weight: 800;
+          color: var(--text);
+        }
+
+        .holo-desc {
+          font-size: 12px;
+          color: var(--text-muted);
+          line-height: 1.45;
+        }
+
+        .holo-stats-grid {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-top: 4px;
+          padding-top: 8px;
+          border-top: 1px solid var(--border);
+          font-size: 11px;
+          color: var(--text-muted);
+          flex-wrap: wrap;
+        }
+
+        .holo-stat-item {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .holo-error-banner {
           display: flex;
           align-items: flex-start;
           gap: 10px;
           padding: 12px 14px;
           border-radius: var(--radius-sm);
           font-size: 12px;
-          margin-top: 14px;
-          line-height: 1.5;
-        }
-
-        .repo-status-alert.success {
-          background: var(--success-muted);
-          color: var(--success);
-          border: 1px solid var(--success-border);
-        }
-
-        .repo-status-alert.error {
-          background: var(--danger-muted);
+          margin-top: 16px;
+          background: var(--danger-bg);
           color: var(--danger);
           border: 1px solid var(--danger-border);
-        }
-
-        .repo-meta-row {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin-top: 6px;
-          font-size: 11px;
-          color: var(--text-secondary);
-        }
-
-        .repo-meta-item {
-          display: inline-flex;
-          align-items: center;
-          gap: 3px;
+          line-height: 1.45;
         }
       `}</style>
 
-      <div className="repo-connect-card">
-        <h3 className="repo-connect-title">
-          <GitBranch size={17} style={{ color: 'var(--primary)' }} />
-          Connect your GitHub repository to IssueFit
-        </h3>
-        <p className="repo-connect-desc">
-          Add a repository from GitHub by pasting the link to that repository.
+      <div className="station-card">
+        <div className="station-header">
+          <div className="station-icon-glow">
+            <GitBranch size={17} />
+          </div>
+          <h3 className="station-title">Connect Repository</h3>
+        </div>
+
+        <p className="station-desc">
+          Paste any public GitHub repository link to inspect metadata and prefill discovery.
         </p>
 
         <form onSubmit={handleConnect}>
-          <div className="repo-connect-input-group">
-            <Link2 size={14} className="repo-input-icon" />
+          <div className="station-input-wrap">
+            <Link2 size={15} className="station-input-ico" />
             <input
               type="text"
-              className={`repo-connect-input${status === 'error' ? ' error' : ''}`}
-              placeholder="e.g. github.com/fastapi/fastapi"
+              className={`station-input${status === 'error' ? ' input-error' : ''}`}
+              placeholder="github.com/owner/repository"
               value={url}
               onChange={handleInputChange}
               disabled={isValidating}
-              aria-label="GitHub repository URL"
+              aria-label="Repository URL Input"
             />
           </div>
 
-          <div className="repo-example-helper">
+          <div className="station-example-row">
             <span>Example:</span>
             <button
               type="button"
-              className="example-chip-link"
+              className="station-chip"
               onClick={() => applyExample('https://github.com/fastapi/fastapi')}
             >
-              github.com/fastapi/fastapi
+              fastapi/fastapi
+            </button>
+            <button
+              type="button"
+              className="station-chip"
+              onClick={() => applyExample('https://github.com/psf/requests')}
+            >
+              psf/requests
             </button>
           </div>
 
           <button
             type="submit"
-            className="connect-action-btn"
+            className="station-action-btn"
             disabled={!url.trim() || isValidating}
           >
             {isValidating ? (
               <>
-                <Loader2 size={14} style={{ animation: 'spin 0.8s linear infinite' }} />
-                <span>Validating with GitHub...</span>
+                <Loader2 size={15} style={{ animation: 'spin 0.8s linear infinite' }} />
+                <span>Validating with GitHub API...</span>
               </>
             ) : (
               <>
-                <span>Connect Repository</span>
+                <span>Inspect & Connect</span>
                 <ArrowRight size={14} />
               </>
             )}
@@ -277,37 +327,41 @@ export default function RepositoryConnectPanel({ onRepoConnected }) {
         </form>
 
         {status === 'success' && repoInfo && (
-          <div className="repo-status-alert success" role="status">
-            <CheckCircle2 size={16} style={{ flexShrink: 0, marginTop: 2 }} />
-            <div>
-              <strong style={{ fontSize: 13, color: 'var(--text)' }}>
-                {repoInfo.full_name || 'Connected'}
-              </strong>
-              {repoInfo.description && (
-                <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>
-                  {repoInfo.description}
-                </div>
+          <div className="holo-repo-card" role="status">
+            <div className="holo-title-row">
+              <CheckCircle2 size={16} style={{ color: 'var(--success)' }} />
+              <span>{repoInfo.full_name}</span>
+            </div>
+
+            {repoInfo.description && (
+              <p className="holo-desc">{repoInfo.description}</p>
+            )}
+
+            <div className="holo-stats-grid">
+              {repoInfo.language && (
+                <span className="holo-stat-item">
+                  <Code2 size={13} style={{ color: 'var(--accent-cyan)' }} />
+                  {repoInfo.language}
+                </span>
               )}
-              <div className="repo-meta-row">
-                {repoInfo.language && (
-                  <span className="repo-meta-item">
-                    <Code2 size={12} />
-                    {repoInfo.language}
-                  </span>
-                )}
-                {repoInfo.stargazers_count !== undefined && (
-                  <span className="repo-meta-item">
-                    <Star size={12} />
-                    {repoInfo.stargazers_count.toLocaleString()} stars
-                  </span>
-                )}
-              </div>
+              {repoInfo.stargazers_count !== undefined && (
+                <span className="holo-stat-item">
+                  <Star size={13} style={{ color: 'var(--warning)' }} />
+                  {repoInfo.stargazers_count.toLocaleString()}
+                </span>
+              )}
+              {repoInfo.open_issues_count !== undefined && (
+                <span className="holo-stat-item">
+                  <Radio size={13} style={{ color: 'var(--success)' }} />
+                  {repoInfo.open_issues_count} open
+                </span>
+              )}
             </div>
           </div>
         )}
 
         {status === 'error' && errorMessage && (
-          <div className="repo-status-alert error" role="alert">
+          <div className="holo-error-banner" role="alert">
             <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
             <span>{errorMessage}</span>
           </div>

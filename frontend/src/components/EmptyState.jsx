@@ -1,26 +1,63 @@
-import { SearchX } from 'lucide-react'
+import { SearchX, FilterX } from 'lucide-react'
 
 export default function EmptyState({ title, description }) {
   return (
     <>
       <style>{`
-        .empty-state {
-          display: flex; flex-direction: column; align-items: center;
-          padding: 72px 20px; gap: 12px; text-align: center;
+        .empty-radar-chamber {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 80px 24px;
+          gap: 16px;
+          text-align: center;
+          background: var(--surface);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px dashed var(--border-bright);
+          border-radius: var(--radius-xl);
+          margin-top: 24px;
+          box-shadow: var(--shadow-glass);
         }
-        .empty-icon { opacity: 0.3; color: var(--muted); }
-        .empty-title { font-size: 16px; font-weight: 700; color: var(--text); }
-        .empty-desc { font-size: 14px; color: var(--muted); max-width: 420px; line-height: 1.6; }
+
+        .empty-icon-capsule {
+          width: 58px;
+          height: 58px;
+          border-radius: 18px;
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid var(--border);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--text-muted);
+        }
+
+        .empty-chamber-title {
+          font-size: 18px;
+          font-weight: 800;
+          color: var(--text);
+          letter-spacing: -0.02em;
+        }
+
+        .empty-chamber-desc {
+          font-size: 13.5px;
+          color: var(--text-muted);
+          max-width: 440px;
+          line-height: 1.6;
+        }
       `}</style>
-      <div className="empty-state" role="status">
-        <SearchX size={44} className="empty-icon" />
-        <p className="empty-title">{title || 'No suitable issues found'}</p>
-        <p className="empty-desc">
+
+      <div className="empty-radar-chamber" role="status">
+        <div className="empty-icon-capsule">
+          <SearchX size={26} />
+        </div>
+        <h3 className="empty-chamber-title">{title || 'No Matching Issues Detected'}</h3>
+        <p className="empty-chamber-desc">
           {description ||
-            'No suitable issues found for this search. Try another repository or contributor profile.'}
+            'No suitable open issues found for this search. Try analyzing another repository or adjusting your filters.'}
         </p>
       </div>
     </>
   )
 }
-

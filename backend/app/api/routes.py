@@ -1,7 +1,9 @@
 from __future__ import annotations
 import json
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
+
+from app.auth.dependencies import require_github_connected_user
 
 from app.schemas import (
     RecommendRequest,
@@ -54,15 +56,22 @@ def _map_github_error(exc: GitHubAPIError, context: str = "") -> JSONResponse:
 
 
 @router.post("/recommend")
-async def recommend(request: RecommendRequest):
+async def recommend(
+    request: RecommendRequest,
+    current_user: dict = Depends(require_github_connected_user),
+):
     req = request.clean()
 
+    # Use the authenticated user's linked GitHub identity for skill matching
+    auth_gh_username = current_user.get("identities", {}).get("github", {}).get("username")
+    effective_username = auth_gh_username or req.username
+
     # ---- Validate user ----
-    user_cache_key = f"user:{req.username}"
+    user_cache_key = f"user:{effective_username}"
     user_data = cache_get(user_cache_key)
     if user_data is None:
         try:
-            user_data = await fetch_user(req.username)
+            user_data = await fetch_user(effective_username)
             cache_set(user_cache_key, user_data, ttl_seconds=CACHE_TTL_SECONDS * 2)
         except GitHubAPIError as exc:
             return _map_github_error(exc, context="user")
@@ -80,11 +89,11 @@ async def recommend(request: RecommendRequest):
     repo_language: str | None = repo_data.get("language")
 
     # ---- Build contributor profile ----
-    profile_cache_key = f"profile:{req.username}"
+    profile_cache_key = f"profile:{effective_username}"
     contributor_profile = cache_get(profile_cache_key)
     if contributor_profile is None:
         try:
-            contributor_profile = await build_contributor_profile(req.username)
+            contributor_profile = await build_contributor_profile(effective_username)
             cache_set(profile_cache_key, contributor_profile, ttl_seconds=CACHE_TTL_SECONDS * 2)
         except GitHubAPIError as exc:
             return _map_github_error(exc, context="user")
@@ -110,7 +119,7 @@ async def recommend(request: RecommendRequest):
             status_code=200,
             content={
                 "success": True,
-                "username": req.username,
+                "username": effective_username,
                 "repository": f"{req.owner}/{req.repo}",
                 "recommendations": [],
                 "meta": {
@@ -152,7 +161,7 @@ async def recommend(request: RecommendRequest):
 
     response = RecommendResponse(
         success=True,
-        username=req.username,
+        username=effective_username,
         repository=f"{req.owner}/{req.repo}",
         recommendations=recommendations,
         meta=RecommendMeta(
