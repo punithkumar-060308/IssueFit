@@ -1,9 +1,20 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config import FRONTEND_ORIGIN
 from app.api.routes import router
+from app.auth.router import auth_router
+from app.database.mongodb import db
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize DB connection on startup
+    await db.init_db()
+    yield
+
 
 app = FastAPI(
     title="IssueFit API",
@@ -19,12 +30,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Auth router mounted at root (/auth)
+app.include_router(auth_router)
+# Core API router mounted at /api
 app.include_router(router, prefix="/api")
 
 
 @app.get("/")
 async def root():
-    return {"message": "IssueFit API is running", "docs": "/docs", "health": "/api/health"}
+    return {
+        "message": "IssueFit API is running",
+        "docs": "/docs",
+        "health": "/api/health",
+        "auth": "/auth/me",
+    }
 
 
 @app.get("/api/health")

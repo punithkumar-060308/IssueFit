@@ -25,7 +25,17 @@ export function useRecommendations() {
         owner: owner.trim(),
         repo: repo.trim(),
       })
-      setRecommendations(data.recommendations || [])
+      const repoName = data.repository || `${owner.trim()}/${repo.trim()}`
+      const enriched = (data.recommendations || []).map((item) => ({
+        ...item,
+        repository: item.repository || repoName,
+        languages: item.languages?.length
+          ? item.languages
+          : item.language
+          ? [item.language]
+          : [],
+      }))
+      setRecommendations(enriched)
     } catch (err) {
       setError(err.message || 'An unexpected error occurred.')
       setRecommendations([])
@@ -43,4 +53,3 @@ export function useRecommendations() {
 
   return { isLoading, recommendations, error, hasSearched, lastSearch, search, reset }
 }
-

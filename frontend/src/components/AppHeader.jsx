@@ -1,6 +1,7 @@
-import { Sun, Moon, Bell, GitPullRequest, Github } from 'lucide-react'
+import { Sun, Moon, Bell, GitMerge, Github, Sparkles, Activity, LogOut } from 'lucide-react'
 import NavigationTabs from './NavigationTabs'
 import GlobalSearch from './GlobalSearch'
+import { useAuth } from '../context/AuthContext'
 
 export default function AppHeader({
   activeTab,
@@ -10,156 +11,234 @@ export default function AppHeader({
   searchQuery,
   onSearchChange,
 }) {
+  const { user, logoutUser } = useAuth()
+
   return (
     <>
       <style>{`
-        .app-header {
-          background: var(--surface);
-          border-bottom: 1px solid var(--border);
+        .header-floating-bar {
           position: sticky;
           top: 0;
-          z-index: 50;
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
+          z-index: 100;
+          background: rgba(6, 8, 19, 0.75);
+          backdrop-filter: blur(24px);
+          -webkit-backdrop-filter: blur(24px);
+          border-bottom: 1px solid var(--border);
         }
 
-        .header-content {
-          max-width: 1440px;
+        [data-theme="light"] .header-floating-bar {
+          background: rgba(255, 255, 255, 0.85);
+        }
+
+        .header-inner {
+          max-width: 1480px;
           margin: 0 auto;
-          height: 64px;
-          padding: 0 24px;
+          height: 68px;
+          padding: 0 28px;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 20px;
+          gap: 24px;
         }
 
-        .header-left {
+        .header-brand-group {
           display: flex;
           align-items: center;
-          gap: 28px;
+          gap: 32px;
         }
 
-        .brand-logo {
+        .brand-link {
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 12px;
           text-decoration: none;
           color: var(--text);
-          font-weight: 700;
-          font-size: 17px;
-          letter-spacing: -0.02em;
+          font-weight: 800;
+          font-size: 19px;
+          letter-spacing: -0.03em;
         }
 
-        .brand-icon-box {
-          width: 32px;
-          height: 32px;
-          border-radius: var(--radius-sm);
-          background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+        .brand-logo-gem {
+          width: 36px;
+          height: 36px;
+          border-radius: 10px;
+          background: var(--primary-gradient);
           display: flex;
           align-items: center;
           justify-content: center;
           color: #ffffff;
-          box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+          box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+          position: relative;
         }
 
-        .brand-badge {
+        .brand-pulse-dot {
+          position: absolute;
+          top: -2px;
+          right: -2px;
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #10b981;
+          box-shadow: 0 0 8px #10b981;
+        }
+
+        .brand-title-wrap {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .brand-tag {
           font-size: 10px;
           font-weight: 700;
-          text-transform: uppercase;
+          color: #a855f7;
+          background: rgba(168, 85, 247, 0.12);
+          border: 1px solid rgba(168, 85, 247, 0.3);
+          border-radius: 9999px;
+          padding: 2px 7px;
           letter-spacing: 0.5px;
-          color: var(--primary);
-          background: var(--primary-muted);
-          border: 1px solid var(--primary-border);
-          padding: 1px 6px;
-          border-radius: 4px;
+          text-transform: uppercase;
         }
 
-        .header-right {
+        .header-controls {
           display: flex;
           align-items: center;
           gap: 12px;
         }
 
         .header-btn {
-          width: 36px;
-          height: 36px;
+          width: 38px;
+          height: 38px;
           display: flex;
           align-items: center;
           justify-content: center;
           border-radius: var(--radius-sm);
           border: 1px solid var(--border);
-          background: var(--surface);
-          color: var(--muted);
-          transition: all 0.15s ease;
+          background: var(--surface-card);
+          color: var(--text-muted);
+          transition: all 0.2s ease;
           cursor: pointer;
         }
 
         .header-btn:hover {
           color: var(--text);
           background: var(--surface-hover);
-          border-color: var(--border-light);
+          border-color: var(--border-bright);
+          box-shadow: var(--shadow-glow);
         }
 
-        .header-btn:disabled {
-          opacity: 0.45;
-          cursor: not-allowed;
-        }
-
-        .profile-avatar-btn {
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
+        .user-profile-badge {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          padding: 4px 10px 4px 6px;
+          background: var(--surface-card);
           border: 1px solid var(--border);
-          background: var(--surface-2);
+          border-radius: 9999px;
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--text);
+        }
+
+        .user-avatar-round {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          object-fit: cover;
+          background: var(--primary-gradient);
           display: flex;
           align-items: center;
           justify-content: center;
-          color: var(--muted);
-          cursor: pointer;
-          transition: all 0.15s ease;
+          color: #fff;
+          font-size: 12px;
+          font-weight: 700;
         }
 
-        .profile-avatar-btn:hover {
-          border-color: var(--primary);
-          color: var(--primary);
+        .user-gh-pill {
+          font-size: 11px;
+          color: var(--primary, #6366f1);
+          background: rgba(99, 102, 241, 0.12);
+          border-radius: 4px;
+          padding: 1px 6px;
+          margin-left: 2px;
         }
 
-        @media (max-width: 768px) {
-          .header-content {
-            padding: 0 16px;
-            gap: 12px;
+        .btn-signout {
+          color: #f87171;
+        }
+
+        .btn-signout:hover {
+          color: #ef4444;
+          background: rgba(239, 68, 68, 0.1);
+          border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        .live-status-pill {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 4px 10px;
+          border-radius: 9999px;
+          background: var(--success-bg);
+          border: 1px solid var(--success-border);
+          color: var(--success);
+          font-size: 11px;
+          font-weight: 600;
+        }
+
+        .live-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: var(--success);
+          animation: pulseGlow 2s infinite ease-in-out;
+        }
+
+        @media (max-width: 820px) {
+          .header-inner {
+            padding: 0 18px;
           }
-          .header-left {
-            gap: 14px;
+          .brand-title {
+            display: none;
           }
-          .brand-name {
+          .live-status-pill {
+            display: none;
+          }
+          .user-name-text {
             display: none;
           }
         }
       `}</style>
 
-      <header className="app-header">
-        <div className="header-content">
-          <div className="header-left">
-            <a href="/" className="brand-logo" aria-label="IssueFit Home">
-              <div className="brand-icon-box">
-                <GitPullRequest size={18} />
+      <header className="header-floating-bar">
+        <div className="header-inner">
+          <div className="header-brand-group">
+            <a href="/" className="brand-link" aria-label="IssueFit Dashboard">
+              <div className="brand-logo-gem">
+                <GitMerge size={20} />
+                <span className="brand-pulse-dot" />
               </div>
-              <span className="brand-name">IssueFit</span>
-              <span className="brand-badge">MVP</span>
+              <div className="brand-title-wrap">
+                <span className="brand-title">IssueFit</span>
+                <span className="brand-tag">AI Radar</span>
+              </div>
             </a>
 
             <NavigationTabs activeTab={activeTab} onTabChange={onTabChange} />
           </div>
 
-          <div className="header-right">
+          <div className="header-controls">
             {activeTab === 'discover' && (
               <GlobalSearch
                 searchQuery={searchQuery}
                 onSearchChange={onSearchChange}
               />
             )}
+
+            <div className="live-status-pill" title="Backend API connected & verified">
+              <span className="live-dot" />
+              <span>API Live</span>
+            </div>
 
             <button
               type="button"
@@ -171,24 +250,46 @@ export default function AppHeader({
               {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
             </button>
 
-            <button
-              type="button"
-              className="header-btn"
-              aria-label="Notifications"
-              disabled
-              title="Notifications (Available with GitHub Auth)"
-            >
-              <Bell size={17} />
-            </button>
+            {user && (
+              <div className="user-profile-badge" title={`Signed in as ${user.email || user.name}`}>
+                {user.avatar_url ? (
+                  <img src={user.avatar_url} alt={user.name || 'User'} className="user-avatar-round" />
+                ) : (
+                  <div className="user-avatar-round">
+                    {(user.name || 'U').charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <span className="user-name-text">{user.name || 'User'}</span>
+                {user.github?.username && (
+                  <span className="user-gh-pill">@{user.github.username}</span>
+                )}
+              </div>
+            )}
 
-            <button
-              type="button"
-              className="profile-avatar-btn"
-              aria-label="GitHub Profile"
-              title="GitHub Profile"
-            >
-              <Github size={17} />
-            </button>
+            {user && (
+              <button
+                type="button"
+                className="header-btn btn-signout"
+                onClick={logoutUser}
+                aria-label="Sign Out"
+                title="Sign Out"
+              >
+                <LogOut size={16} />
+              </button>
+            )}
+
+            {!user && (
+              <a
+                href="https://github.com"
+                target="_blank"
+                rel="noreferrer"
+                className="header-btn"
+                aria-label="GitHub Website"
+                title="GitHub"
+              >
+                <Github size={17} />
+              </a>
+            )}
           </div>
         </div>
       </header>

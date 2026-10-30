@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
-import { Search, Loader2, Sparkles, User, FolderGit2, Link2, Info } from 'lucide-react'
+import { Search, Loader2, Sparkles, User, FolderGit2, Link2, ArrowRight, CornerDownLeft, Terminal } from 'lucide-react'
 import { parseGitHubRepoUrl } from '../utils/formatters'
 
 const INITIAL = { username: '', owner: '', repo: '' }
 
-const SAMPLE_PRESETS = [
-  { username: 'octocat', owner: 'fastapi', repo: 'fastapi' },
-  { username: 'torvalds', owner: 'psf', repo: 'requests' },
-  { username: 'shadcn', owner: 'tailwindlabs', repo: 'tailwindcss' },
+const FEATURED_PRESETS = [
+  { name: 'FastAPI', username: 'octocat', owner: 'fastapi', repo: 'fastapi', lang: 'Python' },
+  { name: 'Requests', username: 'torvalds', owner: 'psf', repo: 'requests', lang: 'Python' },
+  { name: 'Tailwind CSS', username: 'shadcn', owner: 'tailwindlabs', repo: 'tailwindcss', lang: 'JavaScript' },
+  { name: 'Supabase', username: 'octocat', owner: 'supabase', repo: 'supabase', lang: 'TypeScript' },
 ]
 
 export default function SearchForm({ onSubmit, isLoading, prefill }) {
@@ -24,14 +25,13 @@ export default function SearchForm({ onSubmit, isLoading, prefill }) {
   }, [prefill])
 
   const errors = {
-    username: touched.username && !values.username.trim() ? 'GitHub username is required.' : '',
-    owner: touched.owner && !values.owner.trim() ? 'Repository owner is required.' : '',
-    repo: touched.repo && !values.repo.trim() ? 'Repository name is required.' : '',
+    username: touched.username && !values.username.trim() ? 'Contributor username is required' : '',
+    owner: touched.owner && !values.owner.trim() ? 'Repository owner is required' : '',
+    repo: touched.repo && !values.repo.trim() ? 'Repository name is required' : '',
   }
 
   const handleFieldChange = (field) => (e) => {
     const val = e.target.value
-    // If the user pastes a full GitHub URL into owner or repo, auto-split both
     if ((field === 'owner' || field === 'repo') && (val.includes('/') || val.includes('github.com'))) {
       const parsed = parseGitHubRepoUrl(val)
       if (parsed) {
@@ -70,394 +70,385 @@ export default function SearchForm({ onSubmit, isLoading, prefill }) {
     onSubmit(values)
   }
 
-  const applySample = (sample) => {
-    setValues(sample)
+  const applyPreset = (preset) => {
+    const data = {
+      username: preset.username,
+      owner: preset.owner,
+      repo: preset.repo,
+    }
+    setValues(data)
     setTouched({})
-    onSubmit(sample)
+    onSubmit(data)
   }
 
   return (
     <>
       <style>{`
-        .search-form-card {
+        .match-console-card {
           background: var(--surface);
+          backdrop-filter: blur(24px);
+          -webkit-backdrop-filter: blur(24px);
           border: 1px solid var(--border);
-          border-radius: var(--radius-md);
-          padding: 24px;
-          box-shadow: var(--shadow-sm);
+          border-radius: var(--radius-xl);
+          padding: 30px;
+          box-shadow: var(--shadow-glass);
+          position: relative;
+          overflow: hidden;
         }
 
-        .search-form-header {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          margin-bottom: 20px;
-          gap: 16px;
-          flex-wrap: wrap;
+        .match-console-card::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 2px;
+          background: var(--primary-gradient);
         }
 
-        .search-form-title {
-          font-size: 18px;
-          font-weight: 700;
-          color: var(--text);
-          letter-spacing: -0.02em;
-          margin-bottom: 4px;
-        }
-
-        .search-form-subtitle {
-          font-size: 13px;
-          color: var(--muted);
-        }
-
-        .quick-presets {
+        .console-top-row {
           display: flex;
           align-items: center;
-          gap: 6px;
+          justify-content: space-between;
+          gap: 16px;
+          margin-bottom: 24px;
           flex-wrap: wrap;
         }
 
-        .quick-preset-label {
+        .console-title-wrap {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+
+        .console-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
           font-size: 11px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.6px;
+          color: var(--primary);
+        }
+
+        .console-heading {
+          font-size: 22px;
+          font-weight: 800;
+          color: var(--text);
+          letter-spacing: -0.03em;
+        }
+
+        .presets-belt {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .preset-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 12px;
+          border-radius: 9999px;
+          background: var(--surface-card);
+          border: 1px solid var(--border);
+          color: var(--text);
+          font-size: 12px;
           font-weight: 600;
-          color: var(--muted);
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          cursor: pointer;
+        }
+
+        .preset-pill:hover {
+          background: var(--surface-hover);
+          border-color: var(--border-accent);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+        }
+
+        .preset-lang-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: var(--accent-cyan);
+        }
+
+        /* Unified Smart Input Container */
+        .url-omni-bar {
+          position: relative;
+          margin-bottom: 20px;
+        }
+
+        .url-omni-input {
+          width: 100%;
+          height: 46px;
+          background: var(--surface-solid);
+          border: 1px solid var(--border);
+          border-radius: var(--radius);
+          padding: 0 16px 0 42px;
+          font-size: 14px;
+          color: var(--text);
+          font-family: inherit;
+          transition: all 0.2s ease;
+        }
+
+        .url-omni-input:focus {
+          outline: none;
+          border-color: var(--primary);
+          box-shadow: 0 0 0 4px var(--primary-glow);
+        }
+
+        .url-omni-icon {
+          position: absolute;
+          left: 14px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: var(--text-muted);
+          pointer-events: none;
+        }
+
+        /* Bento Fields Grid */
+        .fields-bento-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 16px;
+          margin-bottom: 22px;
+        }
+
+        .bento-field-box {
+          background: var(--surface-card);
+          border: 1px solid var(--border);
+          border-radius: var(--radius);
+          padding: 14px 16px;
+          transition: all 0.2s ease;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .bento-field-box:focus-within {
+          border-color: var(--primary);
+          background: var(--surface-hover);
+          box-shadow: 0 0 0 3px var(--primary-glow);
+        }
+
+        .bento-field-box.has-error {
+          border-color: var(--danger);
+        }
+
+        .bento-field-label {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          font-size: 11px;
+          font-weight: 700;
+          color: var(--text-muted);
           text-transform: uppercase;
           letter-spacing: 0.5px;
         }
 
-        .quick-preset-btn {
-          font-size: 11px;
-          font-weight: 500;
-          padding: 3px 8px;
-          border-radius: 12px;
-          background: var(--tag-bg);
-          color: var(--text-secondary);
-          border: 1px solid var(--border);
-          transition: all 0.15s ease;
-          cursor: pointer;
-        }
-
-        .quick-preset-btn:hover {
-          color: var(--primary);
-          border-color: var(--primary-border);
-          background: var(--primary-muted);
-        }
-
-        .quick-url-input-container {
-          position: relative;
-          margin-bottom: 18px;
-        }
-
-        .quick-url-input {
+        .bento-field-input {
           width: 100%;
-          height: 38px;
-          background: var(--bg);
-          border: 1px dashed var(--border);
-          border-radius: var(--radius-sm);
-          padding: 0 12px 0 34px;
-          font-size: 13px;
+          background: transparent;
+          border: none;
           color: var(--text);
-          transition: border-color 0.15s ease;
-        }
-
-        .quick-url-input:focus {
-          outline: none;
-          border-color: var(--border-active);
-          border-style: solid;
-        }
-
-        .quick-url-icon {
-          position: absolute;
-          left: 10px;
-          top: 50%;
-          transform: translateY(-50%);
-          color: var(--muted);
-          pointer-events: none;
-        }
-
-        .form-fields-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
-          gap: 16px;
-          margin-bottom: 16px;
-        }
-
-        .field-group {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-
-        .field-label {
-          font-size: 12px;
+          font-size: 14px;
           font-weight: 600;
-          color: var(--text-secondary);
-          display: flex;
-          align-items: center;
-          gap: 5px;
+          padding: 0;
         }
 
-        .field-input-box {
-          position: relative;
-        }
-
-        .field-input {
-          width: 100%;
-          height: 40px;
-          background: var(--bg);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-sm);
-          padding: 0 12px;
-          color: var(--text);
-          font-size: 13px;
-          transition: border-color 0.15s ease, box-shadow 0.15s ease;
-        }
-
-        .field-input::placeholder {
-          color: var(--muted);
-          opacity: 0.6;
-        }
-
-        .field-input:focus {
+        .bento-field-input:focus {
           outline: none;
-          border-color: var(--border-active);
-          box-shadow: 0 0 0 3px var(--primary-muted);
         }
 
-        .field-input.has-error {
-          border-color: var(--danger);
+        .bento-field-input::placeholder {
+          color: var(--text-subtle);
+          font-weight: 400;
         }
 
-        .field-error-msg {
+        .bento-hint-text {
+          font-size: 11px;
+          color: var(--text-subtle);
+          margin-top: 2px;
+        }
+
+        .bento-field-error {
           font-size: 11px;
           color: var(--danger);
         }
 
-        .field-example-tag {
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          font-size: 11px;
-          color: var(--muted);
-          background: var(--tag-bg);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-xs);
-          padding: 3px 8px;
-          margin-top: 2px;
-        }
-
-        .field-example-tag strong {
-          color: var(--primary);
-          font-weight: 600;
-        }
-
-        .form-guide-banner {
-          background: var(--tag-bg);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-sm);
-          padding: 10px 14px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 12px;
-          color: var(--text-secondary);
-          margin-bottom: 18px;
-        }
-
-        .guide-icon {
-          color: var(--primary);
-          flex-shrink: 0;
-        }
-
-        .guide-code-chip {
-          background: var(--surface);
-          border: 1px solid var(--border);
-          padding: 1px 6px;
-          border-radius: 4px;
-          font-family: ui-monospace, monospace;
-          color: var(--primary);
-          font-weight: 600;
-        }
-
-        .submit-search-btn {
-          height: 42px;
+        /* Submit Action Button */
+        .submit-radar-btn {
           width: 100%;
+          height: 48px;
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 8px;
-          background: var(--primary);
+          gap: 10px;
+          background: var(--primary-gradient);
           color: #ffffff;
           border: none;
-          border-radius: var(--radius-sm);
-          font-size: 14px;
-          font-weight: 600;
-          box-shadow: 0 2px 10px rgba(59, 130, 246, 0.3);
-          transition: all 0.15s ease;
+          border-radius: var(--radius);
+          font-size: 15px;
+          font-weight: 700;
+          letter-spacing: -0.01em;
+          box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
           cursor: pointer;
         }
 
-        .submit-search-btn:hover:not(:disabled) {
-          background: var(--primary-hover);
-          box-shadow: 0 4px 14px rgba(59, 130, 246, 0.45);
+        .submit-radar-btn:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 25px rgba(99, 102, 241, 0.5);
         }
 
-        .submit-search-btn:disabled {
+        .submit-radar-btn:disabled {
           opacity: 0.65;
           cursor: not-allowed;
+          transform: none;
           box-shadow: none;
         }
 
-        @media (max-width: 860px) {
-          .form-fields-grid {
+        .kbd-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 2px;
+          padding: 2px 6px;
+          background: rgba(255, 255, 255, 0.2);
+          border-radius: 4px;
+          font-size: 11px;
+          font-family: 'JetBrains Mono', monospace;
+        }
+
+        @media (max-width: 900px) {
+          .fields-bento-grid {
             grid-template-columns: 1fr;
-            gap: 14px;
+          }
+          .match-console-card {
+            padding: 20px;
           }
         }
       `}</style>
 
-      <div className="search-form-card">
-        <div className="search-form-header">
-          <div>
-            <h2 className="search-form-title">Find Your Next Contribution</h2>
-            <p className="search-form-subtitle">
-              Enter your GitHub details or paste a repository link below.
-            </p>
+      <div className="match-console-card">
+        <div className="console-top-row">
+          <div className="console-title-wrap">
+            <span className="console-badge">
+              <Sparkles size={13} />
+              AI-Powered Match Engine
+            </span>
+            <h2 className="console-heading">Discover Tailored Issues</h2>
           </div>
 
-          <div className="quick-presets">
-            <span className="quick-preset-label">
-              <Sparkles size={11} style={{ display: 'inline', marginRight: 3 }} />
+          <div className="presets-belt">
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase' }}>
               Quick Try:
             </span>
-            {SAMPLE_PRESETS.map((sample, idx) => (
+            {FEATURED_PRESETS.map((preset, idx) => (
               <button
                 key={idx}
                 type="button"
-                className="quick-preset-btn"
-                onClick={() => applySample(sample)}
+                className="preset-pill"
+                onClick={() => applyPreset(preset)}
                 disabled={isLoading}
               >
-                {sample.owner}/{sample.repo}
+                <span className="preset-lang-dot" />
+                <span>{preset.name}</span>
               </button>
             ))}
           </div>
         </div>
 
         <form onSubmit={handleSubmit} noValidate>
-          <div className="quick-url-input-container">
-            <Link2 size={14} className="quick-url-icon" />
+          <div className="url-omni-bar">
+            <Link2 size={16} className="url-omni-icon" />
             <input
               type="text"
-              className="quick-url-input"
-              placeholder="Paste any GitHub URL (e.g. github.com/fastapi/fastapi) to auto-fill Owner and Name"
+              className="url-omni-input"
+              placeholder="Paste any GitHub URL (e.g. https://github.com/fastapi/fastapi) to auto-fill"
               value={pastedUrl}
               onChange={handleQuickUrlPaste}
-              aria-label="Paste GitHub URL"
+              aria-label="GitHub Repository URL Omnibar"
             />
           </div>
 
-          <div className="form-fields-grid">
-            <div className="field-group">
-              <label className="field-label" htmlFor="input-username">
+          <div className="fields-bento-grid">
+            <div className={`bento-field-box${errors.username ? ' has-error' : ''}`}>
+              <label className="bento-field-label" htmlFor="input-username">
+                <span>1. Contributor</span>
                 <User size={13} />
-                <span>GitHub Username</span>
               </label>
-              <div className="field-input-box">
-                <input
-                  id="input-username"
-                  type="text"
-                  className={`field-input${errors.username ? ' has-error' : ''}`}
-                  placeholder="e.g. octocat"
-                  value={values.username}
-                  onChange={handleFieldChange('username')}
-                  onBlur={handleBlur('username')}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </div>
-              <div className="field-example-tag">
-                <span>Example:</span>
-                <strong>octocat</strong>
-                <span>(your contributor profile)</span>
-              </div>
-              {errors.username && <span className="field-error-msg">{errors.username}</span>}
+              <input
+                id="input-username"
+                type="text"
+                className="bento-field-input"
+                placeholder="e.g. octocat"
+                value={values.username}
+                onChange={handleFieldChange('username')}
+                onBlur={handleBlur('username')}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <span className="bento-hint-text">Your GitHub profile handle</span>
+              {errors.username && <span className="bento-field-error">{errors.username}</span>}
             </div>
 
-            <div className="field-group">
-              <label className="field-label" htmlFor="input-owner">
+            <div className={`bento-field-box${errors.owner ? ' has-error' : ''}`}>
+              <label className="bento-field-label" htmlFor="input-owner">
+                <span>2. Repo Owner</span>
                 <FolderGit2 size={13} />
-                <span>Repository Owner</span>
               </label>
-              <div className="field-input-box">
-                <input
-                  id="input-owner"
-                  type="text"
-                  className={`field-input${errors.owner ? ' has-error' : ''}`}
-                  placeholder="e.g. fastapi"
-                  value={values.owner}
-                  onChange={handleFieldChange('owner')}
-                  onBlur={handleBlur('owner')}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </div>
-              <div className="field-example-tag">
-                <span>Example:</span>
-                <strong>fastapi</strong>
-                <span>(org / account name)</span>
-              </div>
-              {errors.owner && <span className="field-error-msg">{errors.owner}</span>}
+              <input
+                id="input-owner"
+                type="text"
+                className="bento-field-input"
+                placeholder="e.g. fastapi"
+                value={values.owner}
+                onChange={handleFieldChange('owner')}
+                onBlur={handleBlur('owner')}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <span className="bento-hint-text">Organization or creator</span>
+              {errors.owner && <span className="bento-field-error">{errors.owner}</span>}
             </div>
 
-            <div className="field-group">
-              <label className="field-label" htmlFor="input-repo">
+            <div className={`bento-field-box${errors.repo ? ' has-error' : ''}`}>
+              <label className="bento-field-label" htmlFor="input-repo">
+                <span>3. Project Name</span>
                 <FolderGit2 size={13} />
-                <span>Repository Name</span>
               </label>
-              <div className="field-input-box">
-                <input
-                  id="input-repo"
-                  type="text"
-                  className={`field-input${errors.repo ? ' has-error' : ''}`}
-                  placeholder="e.g. fastapi"
-                  value={values.repo}
-                  onChange={handleFieldChange('repo')}
-                  onBlur={handleBlur('repo')}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </div>
-              <div className="field-example-tag">
-                <span>Example:</span>
-                <strong>fastapi</strong>
-                <span>(project repository)</span>
-              </div>
-              {errors.repo && <span className="field-error-msg">{errors.repo}</span>}
+              <input
+                id="input-repo"
+                type="text"
+                className="bento-field-input"
+                placeholder="e.g. fastapi"
+                value={values.repo}
+                onChange={handleFieldChange('repo')}
+                onBlur={handleBlur('repo')}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <span className="bento-hint-text">Specific repository name</span>
+              {errors.repo && <span className="bento-field-error">{errors.repo}</span>}
             </div>
           </div>
 
-          <div className="form-guide-banner">
-            <Info size={15} className="guide-icon" />
-            <span>
-              <strong>URL Formula: </strong>
-              <span>github.com/</span>
-              <span className="guide-code-chip">OWNER</span>
-              <span>/</span>
-              <span className="guide-code-chip">REPOSITORY</span>
-              <span> &nbsp;➔&nbsp; e.g. For <em>github.com/fastapi/fastapi</em> enter Owner: <strong>fastapi</strong>, Repo: <strong>fastapi</strong></span>
-            </span>
-          </div>
-
-          <button type="submit" className="submit-search-btn" disabled={isLoading}>
+          <button type="submit" className="submit-radar-btn" disabled={isLoading}>
             {isLoading ? (
               <>
-                <Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite' }} />
-                <span>Generating Recommendations...</span>
+                <Loader2 size={18} style={{ animation: 'spin 0.8s linear infinite' }} />
+                <span>Scanning Repository & Matching Skills...</span>
               </>
             ) : (
               <>
-                <Search size={16} />
-                <span>Find Suitable Issues</span>
+                <Search size={18} />
+                <span>Calculate & Discover Match Rankings</span>
+                <span className="kbd-chip">
+                  <CornerDownLeft size={11} /> ↵
+                </span>
               </>
             )}
           </button>

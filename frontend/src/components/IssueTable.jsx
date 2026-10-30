@@ -6,31 +6,36 @@ export default function IssueTable({ recommendations }) {
   return (
     <>
       <style>{`
-        .table-responsive-wrapper {
+        .table-outer-frame {
           width: 100%;
           overflow-x: auto;
           background: var(--surface);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
           border: 1px solid var(--border);
-          border-radius: var(--radius);
-          box-shadow: var(--shadow-sm);
+          border-radius: var(--radius-lg);
+          box-shadow: var(--shadow-glass);
         }
 
-        .issue-dashboard-table {
+        .issue-table-aligned {
           width: 100%;
+          min-width: 900px;
+          table-layout: fixed;
           border-collapse: collapse;
           text-align: left;
         }
 
-        .issue-dashboard-table th {
-          background: var(--surface-2);
-          padding: 12px 16px;
+        .issue-table-aligned th {
+          background: var(--surface-solid);
+          padding: 14px 16px;
           font-size: 11px;
-          font-weight: 700;
-          color: var(--muted);
+          font-weight: 800;
+          color: var(--text-muted);
           text-transform: uppercase;
           letter-spacing: 0.6px;
           border-bottom: 1px solid var(--border);
           white-space: nowrap;
+          box-sizing: border-box;
         }
 
         .th-center {
@@ -38,17 +43,26 @@ export default function IssueTable({ recommendations }) {
         }
       `}</style>
 
-      <div className="table-responsive-wrapper">
-        <table className="issue-dashboard-table">
+      <div className="table-outer-frame">
+        <table className="issue-table-aligned">
+          <colgroup>
+            <col style={{ width: '85px' }} />
+            <col style={{ width: '38%' }} />
+            <col style={{ width: '18%' }} />
+            <col style={{ width: '15%' }} />
+            <col style={{ width: '11%' }} />
+            <col style={{ width: '90px' }} />
+            <col style={{ width: '90px' }} />
+          </colgroup>
           <thead>
             <tr>
-              <th style={{ width: '90px' }}>State</th>
-              <th style={{ minWidth: '280px' }}>Name</th>
-              <th style={{ minWidth: '150px' }}>Labels</th>
-              <th style={{ minWidth: '130px' }}>Repository</th>
-              <th style={{ minWidth: '130px' }}>Languages</th>
-              <th className="th-center" style={{ width: '90px' }}>Match Score</th>
-              <th style={{ width: '90px' }}>Action</th>
+              <th>Status</th>
+              <th>Issue Title</th>
+              <th>Labels</th>
+              <th>Repository</th>
+              <th>Language</th>
+              <th className="th-center">Score</th>
+              <th className="th-center">Action</th>
             </tr>
           </thead>
           <tbody>

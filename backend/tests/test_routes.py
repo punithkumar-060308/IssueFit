@@ -10,6 +10,26 @@ from httpx import AsyncClient, ASGITransport
 
 from app.main import app
 from app.storage.cache import clear as clear_cache
+from app.auth.dependencies import require_github_connected_user
+
+MOCK_AUTH_USER = {
+    "_id": "test_user_123",
+    "name": "Octo Cat",
+    "email": "octocat@github.com",
+    "avatar_url": "https://github.com/octocat.png",
+    "identities": {
+        "github": {
+            "id": 583231,
+            "username": "octocat",
+            "profile_url": "https://github.com/octocat",
+        }
+    },
+    "github_connection": {
+        "connected": True,
+        "token_encrypted": "test_token",
+        "scopes": ["read:user"],
+    },
+}
 
 
 # ---------------------------------------------------------------------------
@@ -20,6 +40,7 @@ from app.storage.cache import clear as clear_cache
 async def ac():
     """Async HTTP client wired to the FastAPI ASGI app."""
     clear_cache()
+    app.dependency_overrides[require_github_connected_user] = lambda: MOCK_AUTH_USER
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         yield client
 
