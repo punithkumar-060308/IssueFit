@@ -16,24 +16,51 @@ export function formatDifficulty(difficulty) {
 export function isValidGitHubIssueUrl(url) {
   if (!url) return false
   try {
-    const p = new URL(url)
+    const raw = url.trim()
+    const target = raw.startsWith('http://') || raw.startsWith('https://') ? raw : `https://${raw}`
+    const p = new URL(target)
     return (
-      p.protocol === 'https:' &&
-      p.hostname === 'github.com' &&
+      (p.hostname === 'github.com' || p.hostname === 'www.github.com') &&
       /^\/[^/]+\/[^/]+\/issues\/\d+/.test(p.pathname)
     )
-  } catch { return false }
+  } catch {
+    return false
+  }
 }
 
 export function parseGitHubRepoUrl(url) {
   if (!url) return null
   try {
-    const p = new URL(url.trim())
-    if (p.protocol !== 'https:' || p.hostname !== 'github.com') return null
-    const parts = p.pathname.replace(/^\//, '').replace(/\/$/, '').split('/')
-    if (parts.length < 2 || !parts[0] || !parts[1]) return null
-    return { owner: parts[0], repo: parts[1] }
-  } catch { return null }
+    let raw = url.trim()
+    if (!raw) return null
+
+    // Remove SSH prefix
+    if (raw.startsWith('git@github.com:')) {
+      raw = raw.replace('git@github.com:', '')
+    }
+
+    // Strip http://, https://, www.github.com, github.com
+    raw = raw.replace(/^(?:https?:\/\/)?(?:www\.)?github\.com\//i, '')
+
+    // Strip queries and hashes
+    raw = raw.split('?')[0].split('#')[0].replace(/\/+$/, '')
+
+    // Strip .git
+    if (raw.endsWith('.git')) {
+      raw = raw.slice(0, -4)
+    }
+
+    const parts = raw.split('/').filter(Boolean)
+    if (parts.length < 2) return null
+
+    const owner = parts[0]
+    const repo = parts[1]
+
+    if (!owner || !repo) return null
+    return { owner, repo }
+  } catch {
+    return null
+  }
 }
 
 export function difficultyColor(difficulty) {
@@ -56,4 +83,3 @@ export function truncate(str, maxLen = 80) {
   if (!str) return ''
   return str.length > maxLen ? str.slice(0, maxLen - 1) + '…' : str
 }
-

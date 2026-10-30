@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { GitBranch, Star, Code2, AlertCircle, ArrowUpRight } from 'lucide-react'
 import SearchForm from '../components/SearchForm'
 import FilterPanel, { DEFAULT_FILTERS } from '../components/FilterPanel'
 import IssueTable from '../components/IssueTable'
@@ -142,6 +143,55 @@ export default function DiscoverPage({ searchQuery, connectedRepo }) {
           line-height: 1.5;
         }
 
+        .connected-repo-banner {
+          background: var(--surface);
+          border: 1px solid var(--primary-border);
+          border-left: 4px solid var(--primary);
+          border-radius: var(--radius-sm);
+          padding: 14px 18px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          flex-wrap: wrap;
+          margin-bottom: 20px;
+        }
+
+        .connected-repo-details {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+        }
+
+        .connected-repo-title {
+          font-size: 14px;
+          font-weight: 700;
+          color: var(--text);
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .connected-repo-desc {
+          font-size: 12px;
+          color: var(--muted);
+          max-width: 600px;
+        }
+
+        .connected-repo-metrics {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          font-size: 12px;
+          color: var(--text-secondary);
+        }
+
+        .connected-metric-item {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+        }
+
         .results-container {
           display: flex;
           flex-direction: column;
@@ -155,6 +205,41 @@ export default function DiscoverPage({ searchQuery, connectedRepo }) {
         <h1 className="page-main-heading">Issues</h1>
         <p className="page-main-subtext">Search issues you are interested in...</p>
       </div>
+
+      {connectedRepo?.metadata && (
+        <div className="connected-repo-banner" role="status">
+          <div className="connected-repo-details">
+            <div className="connected-repo-title">
+              <GitBranch size={16} style={{ color: 'var(--primary)' }} />
+              <span>Connected: {connectedRepo.metadata.full_name || `${connectedRepo.owner}/${connectedRepo.repo}`}</span>
+            </div>
+            {connectedRepo.metadata.description && (
+              <p className="connected-repo-desc">{connectedRepo.metadata.description}</p>
+            )}
+          </div>
+
+          <div className="connected-repo-metrics">
+            {connectedRepo.metadata.language && (
+              <span className="connected-metric-item">
+                <Code2 size={13} style={{ color: 'var(--warning)' }} />
+                {connectedRepo.metadata.language}
+              </span>
+            )}
+            {connectedRepo.metadata.stargazers_count !== undefined && (
+              <span className="connected-metric-item">
+                <Star size={13} style={{ color: 'var(--warning)' }} />
+                {connectedRepo.metadata.stargazers_count.toLocaleString()} stars
+              </span>
+            )}
+            {connectedRepo.metadata.open_issues_count !== undefined && (
+              <span className="connected-metric-item">
+                <AlertCircle size={13} style={{ color: 'var(--success)' }} />
+                {connectedRepo.metadata.open_issues_count.toLocaleString()} open issues
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       <SearchForm
         onSubmit={search}

@@ -22,6 +22,27 @@ export async function getRecommendations(payload) {
   return data
 }
 
+export async function validateRepository(url) {
+  const response = await fetch(`${API_BASE_URL}/api/repository/validate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+  })
+
+  let data
+  try {
+    data = await response.json()
+  } catch {
+    throw new Error('Server returned an invalid response.')
+  }
+
+  if (!response.ok || data.success === false) {
+    throw new Error(data?.error?.message || 'Repository could not be found or accessed.')
+  }
+
+  return data
+}
+
 export async function getLeaderboard() {
   try {
     const response = await fetch(`${API_BASE_URL}/api/leaderboard`)
@@ -42,3 +63,13 @@ export async function getTrending() {
   }
 }
 
+export async function checkBackendHealth() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/health`)
+    if (!response.ok) return false
+    const data = await response.json()
+    return data.status === 'ok'
+  } catch {
+    return false
+  }
+}

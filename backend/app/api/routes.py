@@ -179,12 +179,16 @@ async def get_repository(owner: str, repo: str):
     return {
         "success": True,
         "repository": {
-            "full_name": data.get("full_name"),
+            "full_name": data.get("full_name", f"{owner}/{repo}"),
             "description": data.get("description"),
             "default_branch": data.get("default_branch", "main"),
             "language": data.get("language"),
             "stargazers_count": data.get("stargazers_count", 0),
+            "forks_count": data.get("forks_count", 0),
+            "open_issues_count": data.get("open_issues_count", 0),
             "visibility": data.get("visibility", "public"),
+            "owner": owner,
+            "repo": repo,
         },
     }
 
@@ -213,7 +217,11 @@ async def validate_repository(request: RepositoryValidateRequest):
             default_branch=data.get("default_branch", "main"),
             language=data.get("language"),
             stargazers_count=data.get("stargazers_count", 0),
+            forks_count=data.get("forks_count", 0),
+            open_issues_count=data.get("open_issues_count", 0),
             visibility=data.get("visibility", "public"),
+            owner=owner,
+            repo=repo,
         ),
     )
 

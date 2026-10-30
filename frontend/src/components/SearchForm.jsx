@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import { Search, Loader2, Sparkles, User, FolderGit2 } from 'lucide-react'
+import { Search, Loader2, Sparkles, User, FolderGit2, Link2, Info } from 'lucide-react'
+import { parseGitHubRepoUrl } from '../utils/formatters'
 
 const INITIAL = { username: '', owner: '', repo: '' }
 
@@ -12,6 +13,7 @@ const SAMPLE_PRESETS = [
 export default function SearchForm({ onSubmit, isLoading, prefill }) {
   const [values, setValues] = useState(prefill || INITIAL)
   const [touched, setTouched] = useState({})
+  const [pastedUrl, setPastedUrl] = useState('')
   const prevPrefill = useRef(null)
 
   useEffect(() => {
@@ -28,7 +30,33 @@ export default function SearchForm({ onSubmit, isLoading, prefill }) {
   }
 
   const handleFieldChange = (field) => (e) => {
-    setValues((prev) => ({ ...prev, [field]: e.target.value }))
+    const val = e.target.value
+    // If the user pastes a full GitHub URL into owner or repo, auto-split both
+    if ((field === 'owner' || field === 'repo') && (val.includes('/') || val.includes('github.com'))) {
+      const parsed = parseGitHubRepoUrl(val)
+      if (parsed) {
+        setValues((prev) => ({
+          ...prev,
+          owner: parsed.owner,
+          repo: parsed.repo,
+        }))
+        return
+      }
+    }
+    setValues((prev) => ({ ...prev, [field]: val }))
+  }
+
+  const handleQuickUrlPaste = (e) => {
+    const val = e.target.value
+    setPastedUrl(val)
+    const parsed = parseGitHubRepoUrl(val)
+    if (parsed) {
+      setValues((prev) => ({
+        ...prev,
+        owner: parsed.owner,
+        repo: parsed.repo,
+      }))
+    }
   }
 
   const handleBlur = (field) => () => {
@@ -114,11 +142,43 @@ export default function SearchForm({ onSubmit, isLoading, prefill }) {
           background: var(--primary-muted);
         }
 
+        .quick-url-input-container {
+          position: relative;
+          margin-bottom: 18px;
+        }
+
+        .quick-url-input {
+          width: 100%;
+          height: 38px;
+          background: var(--bg);
+          border: 1px dashed var(--border);
+          border-radius: var(--radius-sm);
+          padding: 0 12px 0 34px;
+          font-size: 13px;
+          color: var(--text);
+          transition: border-color 0.15s ease;
+        }
+
+        .quick-url-input:focus {
+          outline: none;
+          border-color: var(--border-active);
+          border-style: solid;
+        }
+
+        .quick-url-icon {
+          position: absolute;
+          left: 10px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: var(--muted);
+          pointer-events: none;
+        }
+
         .form-fields-grid {
           display: grid;
           grid-template-columns: 1fr 1fr 1fr;
           gap: 16px;
-          margin-bottom: 18px;
+          margin-bottom: 16px;
         }
 
         .field-group {
@@ -172,6 +232,52 @@ export default function SearchForm({ onSubmit, isLoading, prefill }) {
           color: var(--danger);
         }
 
+        .field-example-tag {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 11px;
+          color: var(--muted);
+          background: var(--tag-bg);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-xs);
+          padding: 3px 8px;
+          margin-top: 2px;
+        }
+
+        .field-example-tag strong {
+          color: var(--primary);
+          font-weight: 600;
+        }
+
+        .form-guide-banner {
+          background: var(--tag-bg);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-sm);
+          padding: 10px 14px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 12px;
+          color: var(--text-secondary);
+          margin-bottom: 18px;
+        }
+
+        .guide-icon {
+          color: var(--primary);
+          flex-shrink: 0;
+        }
+
+        .guide-code-chip {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          padding: 1px 6px;
+          border-radius: 4px;
+          font-family: ui-monospace, monospace;
+          color: var(--primary);
+          font-weight: 600;
+        }
+
         .submit-search-btn {
           height: 42px;
           width: 100%;
@@ -204,7 +310,7 @@ export default function SearchForm({ onSubmit, isLoading, prefill }) {
         @media (max-width: 860px) {
           .form-fields-grid {
             grid-template-columns: 1fr;
-            gap: 12px;
+            gap: 14px;
           }
         }
       `}</style>
@@ -214,7 +320,7 @@ export default function SearchForm({ onSubmit, isLoading, prefill }) {
           <div>
             <h2 className="search-form-title">Find Your Next Contribution</h2>
             <p className="search-form-subtitle">
-              Enter your GitHub details to discover personalized issue recommendations.
+              Enter your GitHub details or paste a repository link below.
             </p>
           </div>
 
@@ -238,11 +344,23 @@ export default function SearchForm({ onSubmit, isLoading, prefill }) {
         </div>
 
         <form onSubmit={handleSubmit} noValidate>
+          <div className="quick-url-input-container">
+            <Link2 size={14} className="quick-url-icon" />
+            <input
+              type="text"
+              className="quick-url-input"
+              placeholder="Paste any GitHub URL (e.g. github.com/fastapi/fastapi) to auto-fill Owner and Name"
+              value={pastedUrl}
+              onChange={handleQuickUrlPaste}
+              aria-label="Paste GitHub URL"
+            />
+          </div>
+
           <div className="form-fields-grid">
             <div className="field-group">
               <label className="field-label" htmlFor="input-username">
                 <User size={13} />
-                GitHub Username
+                <span>GitHub Username</span>
               </label>
               <div className="field-input-box">
                 <input
@@ -257,13 +375,18 @@ export default function SearchForm({ onSubmit, isLoading, prefill }) {
                   spellCheck={false}
                 />
               </div>
+              <div className="field-example-tag">
+                <span>Example:</span>
+                <strong>octocat</strong>
+                <span>(your contributor profile)</span>
+              </div>
               {errors.username && <span className="field-error-msg">{errors.username}</span>}
             </div>
 
             <div className="field-group">
               <label className="field-label" htmlFor="input-owner">
                 <FolderGit2 size={13} />
-                Repository Owner
+                <span>Repository Owner</span>
               </label>
               <div className="field-input-box">
                 <input
@@ -278,13 +401,18 @@ export default function SearchForm({ onSubmit, isLoading, prefill }) {
                   spellCheck={false}
                 />
               </div>
+              <div className="field-example-tag">
+                <span>Example:</span>
+                <strong>fastapi</strong>
+                <span>(org / account name)</span>
+              </div>
               {errors.owner && <span className="field-error-msg">{errors.owner}</span>}
             </div>
 
             <div className="field-group">
               <label className="field-label" htmlFor="input-repo">
                 <FolderGit2 size={13} />
-                Repository Name
+                <span>Repository Name</span>
               </label>
               <div className="field-input-box">
                 <input
@@ -299,8 +427,25 @@ export default function SearchForm({ onSubmit, isLoading, prefill }) {
                   spellCheck={false}
                 />
               </div>
+              <div className="field-example-tag">
+                <span>Example:</span>
+                <strong>fastapi</strong>
+                <span>(project repository)</span>
+              </div>
               {errors.repo && <span className="field-error-msg">{errors.repo}</span>}
             </div>
+          </div>
+
+          <div className="form-guide-banner">
+            <Info size={15} className="guide-icon" />
+            <span>
+              <strong>URL Formula: </strong>
+              <span>github.com/</span>
+              <span className="guide-code-chip">OWNER</span>
+              <span>/</span>
+              <span className="guide-code-chip">REPOSITORY</span>
+              <span> &nbsp;➔&nbsp; e.g. For <em>github.com/fastapi/fastapi</em> enter Owner: <strong>fastapi</strong>, Repo: <strong>fastapi</strong></span>
+            </span>
           </div>
 
           <button type="submit" className="submit-search-btn" disabled={isLoading}>

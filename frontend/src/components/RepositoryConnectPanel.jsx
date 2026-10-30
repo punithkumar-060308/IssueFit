@@ -1,30 +1,49 @@
 import { useState } from 'react'
-import { GitBranch, CheckCircle2, AlertCircle, ArrowRight, Link2 } from 'lucide-react'
+import { GitBranch, CheckCircle2, AlertCircle, ArrowRight, Link2, Star, Code2, Loader2, Sparkles } from 'lucide-react'
 import { parseGitHubRepoUrl } from '../utils/formatters'
+import { validateRepository } from '../services/issuefitApi'
 
 export default function RepositoryConnectPanel({ onRepoConnected }) {
   const [url, setUrl] = useState('')
+  const [isValidating, setIsValidating] = useState(false)
   const [status, setStatus] = useState(null) // null | 'success' | 'error'
-  const [connected, setConnected] = useState(null)
+  const [repoInfo, setRepoInfo] = useState(null)
   const [errorMessage, setErrorMessage] = useState('')
 
-  const handleConnect = (e) => {
+  const handleConnect = async (e) => {
     e?.preventDefault()
     if (!url.trim()) return
 
-    const parsed = parseGitHubRepoUrl(url)
-    if (!parsed) {
+    const clientParsed = parseGitHubRepoUrl(url)
+    if (!clientParsed) {
       setStatus('error')
       setErrorMessage(
-        'Please enter a valid public GitHub repository URL (e.g. https://github.com/fastapi/fastapi)'
+        'Please enter a valid public GitHub repository URL (e.g. github.com/fastapi/fastapi)'
       )
       return
     }
 
+    setIsValidating(true)
+    setStatus(null)
     setErrorMessage('')
-    setStatus('success')
-    setConnected(parsed)
-    onRepoConnected({ owner: parsed.owner, repo: parsed.repo })
+
+    try {
+      // Validate with backend API endpoint /api/repository/validate
+      const data = await validateRepository(url)
+      const repo = data?.repository || {}
+      setStatus('success')
+      setRepoInfo(repo)
+      onRepoConnected({
+        owner: clientParsed.owner,
+        repo: clientParsed.repo,
+        metadata: repo,
+      })
+    } catch (err) {
+      setStatus('error')
+      setErrorMessage(err.message || 'The repository could not be found or accessed on GitHub.')
+    } finally {
+      setIsValidating(false)
+    }
   }
 
   const handleInputChange = (e) => {
@@ -33,6 +52,12 @@ export default function RepositoryConnectPanel({ onRepoConnected }) {
       setStatus(null)
       setErrorMessage('')
     }
+  }
+
+  const applyExample = (exampleUrl) => {
+    setUrl(exampleUrl)
+    setStatus(null)
+    setErrorMessage('')
   }
 
   return (
@@ -65,7 +90,7 @@ export default function RepositoryConnectPanel({ onRepoConnected }) {
 
         .repo-connect-input-group {
           position: relative;
-          margin-bottom: 12px;
+          margin-bottom: 6px;
         }
 
         .repo-connect-input {
@@ -104,6 +129,32 @@ export default function RepositoryConnectPanel({ onRepoConnected }) {
           pointer-events: none;
         }
 
+        .repo-example-helper {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 11px;
+          color: var(--muted);
+          margin-bottom: 12px;
+          flex-wrap: wrap;
+        }
+
+        .example-chip-link {
+          background: var(--tag-bg);
+          border: 1px solid var(--border);
+          color: var(--primary);
+          padding: 1px 6px;
+          border-radius: 4px;
+          font-family: ui-monospace, monospace;
+          cursor: pointer;
+          font-size: 11px;
+        }
+
+        .example-chip-link:hover {
+          background: var(--primary-muted);
+          border-color: var(--primary-border);
+        }
+
         .connect-action-btn {
           width: 100%;
           height: 38px;
@@ -129,19 +180,19 @@ export default function RepositoryConnectPanel({ onRepoConnected }) {
         }
 
         .connect-action-btn:disabled {
-          opacity: 0.5;
+          opacity: 0.55;
           cursor: not-allowed;
         }
 
         .repo-status-alert {
           display: flex;
           align-items: flex-start;
-          gap: 8px;
-          padding: 10px 12px;
+          gap: 10px;
+          padding: 12px 14px;
           border-radius: var(--radius-sm);
           font-size: 12px;
-          margin-top: 12px;
-          line-height: 1.45;
+          margin-top: 14px;
+          line-height: 1.5;
         }
 
         .repo-status-alert.success {
@@ -154,6 +205,21 @@ export default function RepositoryConnectPanel({ onRepoConnected }) {
           background: var(--danger-muted);
           color: var(--danger);
           border: 1px solid var(--danger-border);
+        }
+
+        .repo-meta-row {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-top: 6px;
+          font-size: 11px;
+          color: var(--text-secondary);
+        }
+
+        .repo-meta-item {
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
         }
       `}</style>
 
@@ -170,35 +236,71 @@ export default function RepositoryConnectPanel({ onRepoConnected }) {
           <div className="repo-connect-input-group">
             <Link2 size={14} className="repo-input-icon" />
             <input
-              type="url"
+              type="text"
               className={`repo-connect-input${status === 'error' ? ' error' : ''}`}
-              placeholder="https://github.com/fastapi/fastapi"
+              placeholder="e.g. github.com/fastapi/fastapi"
               value={url}
               onChange={handleInputChange}
+              disabled={isValidating}
               aria-label="GitHub repository URL"
             />
+          </div>
+
+          <div className="repo-example-helper">
+            <span>Example:</span>
+            <button
+              type="button"
+              className="example-chip-link"
+              onClick={() => applyExample('https://github.com/fastapi/fastapi')}
+            >
+              github.com/fastapi/fastapi
+            </button>
           </div>
 
           <button
             type="submit"
             className="connect-action-btn"
-            disabled={!url.trim()}
+            disabled={!url.trim() || isValidating}
           >
-            <span>Connect Repository</span>
-            <ArrowRight size={14} />
+            {isValidating ? (
+              <>
+                <Loader2 size={14} style={{ animation: 'spin 0.8s linear infinite' }} />
+                <span>Validating with GitHub...</span>
+              </>
+            ) : (
+              <>
+                <span>Connect Repository</span>
+                <ArrowRight size={14} />
+              </>
+            )}
           </button>
         </form>
 
-        {status === 'success' && connected && (
+        {status === 'success' && repoInfo && (
           <div className="repo-status-alert success" role="status">
-            <CheckCircle2 size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+            <CheckCircle2 size={16} style={{ flexShrink: 0, marginTop: 2 }} />
             <div>
-              <strong>Connected: </strong>
-              <span>
-                {connected.owner}/{connected.repo}
-              </span>
-              <div style={{ fontSize: 11, opacity: 0.85, marginTop: 2 }}>
-                Search form pre-filled with this repository.
+              <strong style={{ fontSize: 13, color: 'var(--text)' }}>
+                {repoInfo.full_name || 'Connected'}
+              </strong>
+              {repoInfo.description && (
+                <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>
+                  {repoInfo.description}
+                </div>
+              )}
+              <div className="repo-meta-row">
+                {repoInfo.language && (
+                  <span className="repo-meta-item">
+                    <Code2 size={12} />
+                    {repoInfo.language}
+                  </span>
+                )}
+                {repoInfo.stargazers_count !== undefined && (
+                  <span className="repo-meta-item">
+                    <Star size={12} />
+                    {repoInfo.stargazers_count.toLocaleString()} stars
+                  </span>
+                )}
               </div>
             </div>
           </div>

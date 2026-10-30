@@ -66,10 +66,14 @@ class RepositoryValidateRequest(BaseModel):
 class RepositoryInfo(BaseModel):
     full_name: str
     description: str | None = None
-    default_branch: str
+    default_branch: str = "main"
     language: str | None = None
-    stargazers_count: int
-    visibility: str
+    stargazers_count: int = 0
+    forks_count: int = 0
+    open_issues_count: int = 0
+    visibility: str = "public"
+    owner: str | None = None
+    repo: str | None = None
 
 
 class RepositoryValidateResponse(BaseModel):

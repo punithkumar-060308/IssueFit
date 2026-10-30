@@ -1,23 +1,44 @@
 from __future__ import annotations
+import re
 from urllib.parse import urlparse
 from app.services.github_client import fetch_repository, GitHubAPIError
 
 
 def parse_github_url(url: str) -> tuple[str, str]:
     """
-    Parse a GitHub repository URL and return (owner, repo).
-    Raises ValueError for invalid URLs.
+    Parse a GitHub repository URL or owner/repo string and return (owner, repo).
+    Accepts:
+      - https://github.com/owner/repo
+      - http://github.com/owner/repo
+      - github.com/owner/repo
+      - git@github.com:owner/repo.git
+      - owner/repo
+      - URLs with trailing /issues, /pulls, etc.
     """
-    parsed = urlparse(url.strip())
-    if parsed.scheme not in ("https", "http"):
-        raise ValueError("URL must use https scheme.")
-    if parsed.hostname != "github.com":
-        raise ValueError("URL must be from github.com.")
-    parts = [p for p in parsed.path.strip("/").split("/") if p]
+    raw = url.strip()
+    if not raw:
+        raise ValueError("URL cannot be empty.")
+
+    # Strip SSH prefix git@github.com:
+    if raw.startswith("git@github.com:"):
+        raw = raw.replace("git@github.com:", "")
+
+    # Strip protocols and domain if present
+    raw = re.sub(r"^(?:https?:\/\/)?(?:www\.)?github\.com\/", "", raw, flags=re.IGNORECASE)
+
+    # Strip query parameters and hash anchors
+    raw = raw.split("?")[0].split("#")[0].rstrip("/")
+
+    # Strip .git suffix
+    if raw.endswith(".git"):
+        raw = raw[:-4]
+
+    parts = [p for p in raw.split("/") if p]
     if len(parts) < 2:
-        raise ValueError("URL must include owner and repository name.")
+        raise ValueError("Please provide a valid GitHub repository URL (e.g. github.com/owner/repo or owner/repo).")
+
     owner = parts[0]
-    repo = parts[1].removesuffix(".git")
+    repo = parts[1]
     return owner, repo
 
 
@@ -33,5 +54,9 @@ async def validate_and_fetch_repository(url: str) -> dict:
         "default_branch": data.get("default_branch", "main"),
         "language": data.get("language"),
         "stargazers_count": data.get("stargazers_count", 0),
+        "forks_count": data.get("forks_count", 0),
+        "open_issues_count": data.get("open_issues_count", 0),
         "visibility": data.get("visibility", "public"),
+        "owner": owner,
+        "repo": repo,
     }
