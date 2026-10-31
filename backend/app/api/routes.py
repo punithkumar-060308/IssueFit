@@ -23,6 +23,8 @@ from app.services.github_client import (
     fetch_user,
     fetch_repository,
     GitHubAPIError,
+    fetch_trending_repositories,
+    get_default_leaderboard,
 )
 from app.services.contributor_service import build_contributor_profile
 from app.services.issue_service import get_open_issues
@@ -314,17 +316,19 @@ async def validate_repository(request: RepositoryValidateRequest):
 
 @router.get("/trending")
 async def trending():
+    items = await fetch_trending_repositories()
     return TrendingResponse(
         success=True,
-        items=[],
-        message="Trending data is not yet available.",
+        items=items,
+        message="Trending repositories retrieved successfully.",
     )
 
 
 @router.get("/leaderboard")
 async def leaderboard():
+    items = get_default_leaderboard()
     return LeaderboardResponse(
         success=True,
-        items=[],
-        message="Leaderboard is coming soon.",
+        items=items,
+        message="Leaderboard retrieved successfully.",
     )

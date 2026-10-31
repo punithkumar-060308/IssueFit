@@ -12,7 +12,7 @@ export default function LeaderboardPage() {
     let cancelled = false
     getLeaderboard()
       .then((data) => {
-        if (!cancelled) setEntries(data?.entries || data?.leaderboard || null)
+        if (!cancelled) setEntries(data?.entries || data?.leaderboard || data?.items || null)
       })
       .catch(() => {
         if (!cancelled) setEntries(null)

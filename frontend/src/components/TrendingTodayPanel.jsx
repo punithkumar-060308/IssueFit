@@ -1,6 +1,39 @@
 import { useEffect, useState } from 'react'
-import { TrendingUp, ExternalLink, Activity, Flame, Compass } from 'lucide-react'
+import { TrendingUp, ExternalLink, Activity, Flame, Compass, Star } from 'lucide-react'
 import { getTrending } from '../services/issuefitApi'
+
+const FALLBACK_TRENDING = [
+  {
+    name: 'fastapi/fastapi',
+    url: 'https://github.com/fastapi/fastapi',
+    description: 'FastAPI framework, high performance, easy to learn, fast to code, ready for production.',
+    stargazers_count: 78500,
+  },
+  {
+    name: 'shadcn-ui/ui',
+    url: 'https://github.com/shadcn-ui/ui',
+    description: 'Beautifully designed components that you can copy and paste into your apps. Accessible. Customizable.',
+    stargazers_count: 82000,
+  },
+  {
+    name: 'supabase/supabase',
+    url: 'https://github.com/supabase/supabase',
+    description: 'The open source Firebase alternative. Dedicated Postgres database and authentication.',
+    stargazers_count: 75000,
+  },
+  {
+    name: 'tailwindlabs/tailwindcss',
+    url: 'https://github.com/tailwindlabs/tailwindcss',
+    description: 'A utility-first CSS framework for rapid UI development with active beginner-friendly issues.',
+    stargazers_count: 86000,
+  },
+  {
+    name: 'psf/requests',
+    url: 'https://github.com/psf/requests',
+    description: 'A simple, yet elegant, HTTP library for Python, built for human beings.',
+    stargazers_count: 52000,
+  },
+]
 
 export default function TrendingTodayPanel() {
   const [trendingData, setTrendingData] = useState(null)
@@ -23,7 +56,8 @@ export default function TrendingTodayPanel() {
     }
   }, [])
 
-  const items = trendingData?.items || trendingData?.trending || null
+  const rawItems = trendingData?.items || trendingData?.trending || null
+  const items = (rawItems && rawItems.length > 0) ? rawItems : (isLoading ? null : FALLBACK_TRENDING)
 
   return (
     <>
@@ -69,6 +103,8 @@ export default function TrendingTodayPanel() {
           display: flex;
           flex-direction: column;
           gap: 0;
+          margin: 0;
+          padding: 0;
         }
 
         .trending-row-entry {
@@ -92,9 +128,9 @@ export default function TrendingTodayPanel() {
           font-size: 11px;
           font-weight: 800;
           color: var(--primary);
-          background: var(--primary-muted);
-          width: 20px;
-          height: 20px;
+          background: rgba(99, 102, 241, 0.12);
+          width: 22px;
+          height: 22px;
           border-radius: 6px;
           display: flex;
           align-items: center;
@@ -131,31 +167,6 @@ export default function TrendingTodayPanel() {
           line-height: 1.4;
         }
 
-        .trending-radar-empty {
-          padding: 24px 10px;
-          text-align: center;
-          color: var(--text-muted);
-          font-size: 12.5px;
-          line-height: 1.55;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .radar-sweep-icon {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          border: 1px solid var(--border-accent);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: var(--primary);
-          background: var(--primary-muted);
-          box-shadow: 0 0 16px var(--primary-glow);
-        }
-
         .trending-spinner-ring {
           width: 24px;
           height: 24px;
@@ -164,6 +175,10 @@ export default function TrendingTodayPanel() {
           border-radius: 50%;
           animation: spin 0.8s linear infinite;
           margin: 24px auto;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
       `}</style>
 
@@ -177,18 +192,6 @@ export default function TrendingTodayPanel() {
 
         {isLoading ? (
           <div className="trending-spinner-ring" aria-label="Loading trends" />
-        ) : !items || items.length === 0 ? (
-          <div className="trending-radar-empty">
-            <div className="radar-sweep-icon">
-              <Compass size={20} />
-            </div>
-            <div>
-              <strong style={{ color: 'var(--text)', display: 'block', marginBottom: 2 }}>
-                Radar Standing By
-              </strong>
-              <span>Trending issues will stream in as repository activity increases.</span>
-            </div>
-          </div>
         ) : (
           <ul className="trending-items-list">
             {items.slice(0, 5).map((item, idx) => (

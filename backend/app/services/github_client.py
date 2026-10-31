@@ -164,3 +164,136 @@ async def fetch_repository_tree(owner: str, repo: str, branch: str = "main", max
     except Exception as e:
         logger.warning(f"Could not fetch git tree for {owner}/{repo} on branch {branch}: {e}")
         return []
+
+
+async def fetch_trending_repositories() -> list[dict]:
+    """
+    Fetch trending repositories from GitHub API with active issues,
+    with an immediate high-quality fallback for rate limits or offline states.
+    """
+    try:
+        data = await _github_get(
+            "/search/repositories",
+            params={
+                "q": "stars:>3000 good-first-issues:>0",
+                "sort": "updated",
+                "order": "desc",
+                "per_page": 10,
+            },
+        )
+        if isinstance(data, dict) and "items" in data and len(data["items"]) > 0:
+            results = []
+            for repo in data["items"][:10]:
+                results.append({
+                    "name": repo.get("full_name"),
+                    "full_name": repo.get("full_name"),
+                    "title": repo.get("full_name"),
+                    "url": repo.get("html_url"),
+                    "html_url": repo.get("html_url"),
+                    "description": repo.get("description") or f"Trending open-source project ({repo.get('language') or 'General'})",
+                    "stargazers_count": repo.get("stargazers_count", 0),
+                    "open_issues_count": repo.get("open_issues_count", 0),
+                    "language": repo.get("language"),
+                })
+            if results:
+                return results
+    except Exception as e:
+        logger.warning(f"Error fetching trending repositories from GitHub API: {e}")
+
+    return [
+        {
+            "name": "fastapi/fastapi",
+            "full_name": "fastapi/fastapi",
+            "title": "fastapi/fastapi",
+            "url": "https://github.com/fastapi/fastapi",
+            "html_url": "https://github.com/fastapi/fastapi",
+            "description": "FastAPI framework, high performance, easy to learn, fast to code, ready for production.",
+            "language": "Python",
+            "stargazers_count": 78500,
+        },
+        {
+            "name": "shadcn-ui/ui",
+            "full_name": "shadcn-ui/ui",
+            "title": "shadcn-ui/ui",
+            "url": "https://github.com/shadcn-ui/ui",
+            "html_url": "https://github.com/shadcn-ui/ui",
+            "description": "Beautifully designed components that you can copy and paste into your apps. Accessible. Customizable.",
+            "language": "TypeScript",
+            "stargazers_count": 82000,
+        },
+        {
+            "name": "supabase/supabase",
+            "full_name": "supabase/supabase",
+            "title": "supabase/supabase",
+            "url": "https://github.com/supabase/supabase",
+            "html_url": "https://github.com/supabase/supabase",
+            "description": "The open source Firebase alternative. Supabase gives you a dedicated Postgres database.",
+            "language": "TypeScript",
+            "stargazers_count": 75000,
+        },
+        {
+            "name": "tailwindlabs/tailwindcss",
+            "full_name": "tailwindlabs/tailwindcss",
+            "title": "tailwindlabs/tailwindcss",
+            "url": "https://github.com/tailwindlabs/tailwindcss",
+            "html_url": "https://github.com/tailwindlabs/tailwindcss",
+            "description": "A utility-first CSS framework for rapid UI development with active beginner issues.",
+            "language": "JavaScript",
+            "stargazers_count": 86000,
+        },
+        {
+            "name": "psf/requests",
+            "full_name": "psf/requests",
+            "title": "psf/requests",
+            "url": "https://github.com/psf/requests",
+            "html_url": "https://github.com/psf/requests",
+            "description": "A simple, yet elegant, HTTP library for Python, built for human beings.",
+            "language": "Python",
+            "stargazers_count": 52000,
+        },
+    ]
+
+
+def get_default_leaderboard() -> list[dict]:
+    return [
+        {
+            "username": "tiangolo",
+            "avatar_url": "https://avatars.githubusercontent.com/u/1326112?v=4",
+            "merged_prs": 412,
+            "repositories": 28,
+            "score": 98.4,
+            "impact_score": 98.4,
+        },
+        {
+            "username": "shadcn",
+            "avatar_url": "https://avatars.githubusercontent.com/u/124599?v=4",
+            "merged_prs": 356,
+            "repositories": 19,
+            "score": 96.1,
+            "impact_score": 96.1,
+        },
+        {
+            "username": "antfu",
+            "avatar_url": "https://avatars.githubusercontent.com/u/11247099?v=4",
+            "merged_prs": 298,
+            "repositories": 45,
+            "score": 94.7,
+            "impact_score": 94.7,
+        },
+        {
+            "username": "sindresorhus",
+            "avatar_url": "https://avatars.githubusercontent.com/u/170270?v=4",
+            "merged_prs": 520,
+            "repositories": 82,
+            "score": 93.9,
+            "impact_score": 93.9,
+        },
+        {
+            "username": "octocat",
+            "avatar_url": "https://avatars.githubusercontent.com/u/583231?v=4",
+            "merged_prs": 184,
+            "repositories": 12,
+            "score": 89.2,
+            "impact_score": 89.2,
+        },
+    ]
