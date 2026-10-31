@@ -3,7 +3,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from app.config import FRONTEND_ORIGIN
+from app.config import FRONTEND_ORIGIN, FRONTEND_URL
 from app.api.routes import router
 from app.auth.router import auth_router
 from app.database.mongodb import db
@@ -22,9 +22,23 @@ app = FastAPI(
     description="Find open-source issues that fit a contributor's public GitHub skills.",
 )
 
+allowed_origins = [
+    origin.strip()
+    for origin in f"{FRONTEND_ORIGIN},{FRONTEND_URL}".split(",")
+    if origin.strip()
+]
+for default_origin in [
+    "https://issue-fit.vercel.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]:
+    if default_origin not in allowed_origins:
+        allowed_origins.append(default_origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_ORIGIN, "http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

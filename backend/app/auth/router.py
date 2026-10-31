@@ -42,45 +42,76 @@ def _clear_session_cookie(response: Response):
     )
 
 
+def _resolve_redirect_uri(request: Request, configured_uri: str, path: str) -> str:
+    # If explicitly configured to non-localhost, prefer it
+    if configured_uri and "localhost" not in configured_uri and "127.0.0.1" not in configured_uri:
+        return configured_uri
+
+    # Detect live host from reverse proxy / Render headers
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "https"
+    if host and "localhost" not in host and "127.0.0.1" not in host:
+        return f"{proto}://{host}{path}"
+
+    return configured_uri
+
+
+def _resolve_frontend_url(request: Request) -> str:
+    if FRONTEND_URL and "localhost" not in FRONTEND_URL and "127.0.0.1" not in FRONTEND_URL:
+        return FRONTEND_URL
+
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    if host and ("render.com" in host or "issuefit" in host):
+        return "https://issue-fit.vercel.app"
+
+    return FRONTEND_URL
+
+
 # -------------------------------------------------------------
 # Google OAuth
 # -------------------------------------------------------------
 @auth_router.get("/google/login")
-async def google_login():
+async def google_login(request: Request):
+    frontend_url = _resolve_frontend_url(request)
     if not GOOGLE_CLIENT_ID:
-        return RedirectResponse(f"{FRONTEND_URL}/login?error=google_not_configured")
+        return RedirectResponse(f"{frontend_url}/login?error=google_not_configured")
 
     state = generate_oauth_state()
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    redirect_uri = _resolve_redirect_uri(request, GOOGLE_REDIRECT_URI, "/auth/google/callback")
     await db.oauth_states.insert_one({
         "state": state,
         "action": "google_login",
+        "redirect_uri": redirect_uri,
         "expires_at": expires_at.isoformat(),
     })
-    return RedirectResponse(get_google_auth_url(state))
+    return RedirectResponse(get_google_auth_url(state, redirect_uri=redirect_uri))
 
 
 @auth_router.get("/google/callback")
 async def google_callback(
+    request: Request,
     code: Optional[str] = None,
     state: Optional[str] = None,
     error: Optional[str] = None,
 ):
+    frontend_url = _resolve_frontend_url(request)
     if error or not code or not state:
-        return RedirectResponse(f"{FRONTEND_URL}/login?error=cancelled")
+        return RedirectResponse(f"{frontend_url}/login?error=cancelled")
 
     state_record = await db.oauth_states.find_one({"state": state, "action": "google_login"})
     if not state_record:
-        return RedirectResponse(f"{FRONTEND_URL}/login?error=invalid_state")
+        return RedirectResponse(f"{frontend_url}/login?error=invalid_state")
 
+    redirect_uri = state_record.get("redirect_uri") or _resolve_redirect_uri(request, GOOGLE_REDIRECT_URI, "/auth/google/callback")
     await db.oauth_states.delete_one({"state": state})
 
     try:
-        token_data = await exchange_google_code(code)
+        token_data = await exchange_google_code(code, redirect_uri=redirect_uri)
         google_user = await fetch_google_user_info(token_data.get("access_token"))
     except Exception as exc:
         logger.error(f"Google OAuth exchange error: {exc}")
-        return RedirectResponse(f"{FRONTEND_URL}/login?error=auth_failed")
+        return RedirectResponse(f"{frontend_url}/login?error=auth_failed")
 
     sub = str(google_user.get("sub"))
     email = google_user.get("email")
@@ -136,7 +167,7 @@ async def google_callback(
         "expires_at": session_expires.isoformat(),
     })
 
-    dest_url = f"{FRONTEND_URL}/"
+    dest_url = f"{frontend_url}/"
     redirect_resp = RedirectResponse(url=dest_url, status_code=status.HTTP_302_FOUND)
     _set_session_cookie(redirect_resp, session_id)
     return redirect_resp
@@ -146,18 +177,21 @@ async def google_callback(
 # GitHub OAuth
 # -------------------------------------------------------------
 @auth_router.get("/github/login")
-async def github_login():
+async def github_login(request: Request):
+    frontend_url = _resolve_frontend_url(request)
     if not GITHUB_CLIENT_ID:
-        return RedirectResponse(f"{FRONTEND_URL}/login?error=github_not_configured")
+        return RedirectResponse(f"{frontend_url}/login?error=github_not_configured")
 
     state = generate_oauth_state()
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    redirect_uri = _resolve_redirect_uri(request, GITHUB_REDIRECT_URI, "/auth/github/callback")
     await db.oauth_states.insert_one({
         "state": state,
         "action": "github_login",
+        "redirect_uri": redirect_uri,
         "expires_at": expires_at.isoformat(),
     })
-    return RedirectResponse(get_github_auth_url(state, is_connect=False))
+    return RedirectResponse(get_github_auth_url(state, is_connect=False, custom_redirect_uri=redirect_uri))
 
 
 @auth_router.get("/github/callback")
@@ -167,24 +201,26 @@ async def github_callback(
     state: Optional[str] = None,
     error: Optional[str] = None,
 ):
+    frontend_url = _resolve_frontend_url(request)
     if error or not code or not state:
-        return RedirectResponse(f"{FRONTEND_URL}/login?error=cancelled")
+        return RedirectResponse(f"{frontend_url}/login?error=cancelled")
 
     # Match state for either login or connect action
     state_record = await db.oauth_states.find_one({"state": state})
     if not state_record:
-        return RedirectResponse(f"{FRONTEND_URL}/login?error=invalid_state")
+        return RedirectResponse(f"{frontend_url}/login?error=invalid_state")
 
     action = state_record.get("action")
     bound_user_id = state_record.get("user_id")
+    redirect_uri = state_record.get("redirect_uri") or _resolve_redirect_uri(request, GITHUB_REDIRECT_URI, "/auth/github/callback")
     await db.oauth_states.delete_one({"state": state})
 
     try:
-        token_data = await exchange_github_code(code, is_connect=(action == "github_connect"))
+        token_data = await exchange_github_code(code, is_connect=(action == "github_connect"), custom_redirect_uri=redirect_uri)
         gh_user = await fetch_github_user_info(token_data.get("access_token"))
     except Exception as exc:
         logger.error(f"GitHub OAuth error: {exc}")
-        target = f"{FRONTEND_URL}/connect-github?error=auth_failed" if action == "github_connect" else f"{FRONTEND_URL}/login?error=auth_failed"
+        target = f"{frontend_url}/connect-github?error=auth_failed" if action == "github_connect" else f"{frontend_url}/login?error=auth_failed"
         return RedirectResponse(target)
 
     gh_id = int(gh_user["id"])
@@ -199,14 +235,14 @@ async def github_callback(
     # Flow 1: Account Linking (action == "github_connect")
     if action == "github_connect":
         if not bound_user_id:
-            return RedirectResponse(f"{FRONTEND_URL}/login?error=session_required")
+            return RedirectResponse(f"{frontend_url}/login?error=session_required")
 
         # Conflict check: Check if this GitHub ID is linked to another user
         conflict_user = await db.users.find_one({"identities.github.id": gh_id})
         if conflict_user and str(conflict_user.get("_id")) != str(bound_user_id):
             logger.warning(f"GitHub linking conflict: GitHub ID {gh_id} is already linked to user {conflict_user.get('_id')}")
             return RedirectResponse(
-                f"{FRONTEND_URL}/connect-github?error=conflict&message=This+GitHub+account+is+already+linked+to+another+IssueFit+user."
+                f"{frontend_url}/connect-github?error=conflict&message=This+GitHub+account+is+already+linked+to+another+IssueFit+user."
             )
 
         # Link to current user
@@ -243,7 +279,7 @@ async def github_callback(
             "expires_at": new_expires.isoformat(),
         })
 
-        redirect_resp = RedirectResponse(url=f"{FRONTEND_URL}/", status_code=status.HTTP_302_FOUND)
+        redirect_resp = RedirectResponse(url=f"{frontend_url}/", status_code=status.HTTP_302_FOUND)
         _set_session_cookie(redirect_resp, new_session_id)
         return redirect_resp
 
@@ -298,7 +334,7 @@ async def github_callback(
         "expires_at": session_expires.isoformat(),
     })
 
-    redirect_resp = RedirectResponse(url=f"{FRONTEND_URL}/", status_code=status.HTTP_302_FOUND)
+    redirect_resp = RedirectResponse(url=f"{frontend_url}/", status_code=status.HTTP_302_FOUND)
     _set_session_cookie(redirect_resp, session_id)
     return redirect_resp
 
@@ -308,22 +344,25 @@ async def github_callback(
 # -------------------------------------------------------------
 @auth_router.get("/github/connect")
 async def github_connect(request: Request):
+    frontend_url = _resolve_frontend_url(request)
     user = await get_current_user_optional(request)
     if not user:
-        return RedirectResponse(f"{FRONTEND_URL}/login?error=session_required")
+        return RedirectResponse(f"{frontend_url}/login?error=session_required")
 
     if not GITHUB_CLIENT_ID:
-        return RedirectResponse(f"{FRONTEND_URL}/connect-github?error=github_not_configured")
+        return RedirectResponse(f"{frontend_url}/connect-github?error=github_not_configured")
 
     state = generate_oauth_state()
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    redirect_uri = _resolve_redirect_uri(request, GITHUB_REDIRECT_URI, "/auth/github/callback")
     await db.oauth_states.insert_one({
         "state": state,
         "action": "github_connect",
         "user_id": str(user["_id"]),
+        "redirect_uri": redirect_uri,
         "expires_at": expires_at.isoformat(),
     })
-    return RedirectResponse(get_github_auth_url(state, is_connect=True))
+    return RedirectResponse(get_github_auth_url(state, is_connect=True, custom_redirect_uri=redirect_uri))
 
 
 @auth_router.get("/github/connect/callback")
