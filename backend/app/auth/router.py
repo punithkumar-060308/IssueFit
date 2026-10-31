@@ -12,6 +12,8 @@ from app.config import (
     SESSION_COOKIE_NAME,
     GOOGLE_CLIENT_ID,
     GITHUB_CLIENT_ID,
+    GOOGLE_REDIRECT_URI,
+    GITHUB_REDIRECT_URI,
 )
 from app.core.security import generate_session_id, generate_oauth_state, encrypt_token
 from app.database.mongodb import db
