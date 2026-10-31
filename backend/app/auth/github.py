@@ -13,9 +13,9 @@ GITHUB_TOKEN_ENDPOINT = "https://github.com/login/oauth/access_token"
 GITHUB_USER_ENDPOINT = "https://api.github.com/user"
 
 
-def get_github_auth_url(state: str, is_connect: bool = False) -> str:
-    # Use GITHUB_REDIRECT_URI as primary to support GitHub's single callback URL constraint
-    redirect_uri = GITHUB_REDIRECT_URI
+def get_github_auth_url(state: str, is_connect: bool = False, custom_redirect_uri: Optional[str] = None) -> str:
+    # Use custom_redirect_uri or primary GITHUB_REDIRECT_URI
+    redirect_uri = custom_redirect_uri or GITHUB_REDIRECT_URI
     params = {
         "client_id": GITHUB_CLIENT_ID or "",
         "redirect_uri": redirect_uri,

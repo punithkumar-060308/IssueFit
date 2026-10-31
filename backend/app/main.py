@@ -23,18 +23,24 @@ app = FastAPI(
 )
 
 # Defensively sanitize CORS origins to ensure no trailing slashes break browser Origin matching
-allowed_origins = list(
-    {
-        FRONTEND_ORIGIN.rstrip("/"),
-        FRONTEND_URL.rstrip("/"),
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    }
-)
+allowed_origins = [
+    origin.strip().rstrip("/")
+    for origin in f"{FRONTEND_ORIGIN},{FRONTEND_URL}".split(",")
+    if origin.strip()
+]
+for default_origin in [
+    "https://issue-fit.vercel.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]:
+    cleaned = default_origin.rstrip("/")
+    if cleaned not in allowed_origins:
+        allowed_origins.append(cleaned)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -68,6 +74,18 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         content={
             "success": False,
             "error": {"code": "HTTP_ERROR", "message": str(exc.detail)},
+            "recommendations": [],
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "error": {"code": "INTERNAL_SERVER_ERROR", "message": str(exc)},
             "recommendations": [],
         },
     )

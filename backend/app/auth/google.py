@@ -12,10 +12,11 @@ GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_ENDPOINT = "https://www.googleapis.com/oauth2/v3/userinfo"
 
 
-def get_google_auth_url(state: str) -> str:
+def get_google_auth_url(state: str, redirect_uri: Optional[str] = None) -> str:
+    uri = redirect_uri or GOOGLE_REDIRECT_URI
     params = {
         "client_id": GOOGLE_CLIENT_ID or "",
-        "redirect_uri": GOOGLE_REDIRECT_URI,
+        "redirect_uri": uri,
         "response_type": "code",
         "scope": "openid email profile",
         "state": state,
@@ -25,7 +26,8 @@ def get_google_auth_url(state: str) -> str:
     return f"{GOOGLE_AUTH_ENDPOINT}?{urllib.parse.urlencode(params)}"
 
 
-async def exchange_google_code(code: str) -> Dict[str, Any]:
+async def exchange_google_code(code: str, redirect_uri: Optional[str] = None) -> Dict[str, Any]:
+    uri = redirect_uri or GOOGLE_REDIRECT_URI
     async with httpx.AsyncClient(timeout=10.0) as client:
         response = await client.post(
             GOOGLE_TOKEN_ENDPOINT,
@@ -34,7 +36,7 @@ async def exchange_google_code(code: str) -> Dict[str, Any]:
                 "client_secret": GOOGLE_CLIENT_SECRET,
                 "code": code,
                 "grant_type": "authorization_code",
-                "redirect_uri": GOOGLE_REDIRECT_URI,
+                "redirect_uri": uri,
             },
             headers={"Accept": "application/json"},
         )
