@@ -138,6 +138,15 @@ export default function AppHeader({
           font-size: 13px;
           font-weight: 600;
           color: var(--text);
+          cursor: pointer;
+          transition: all 0.2s ease;
+          outline: none;
+        }
+
+        .user-profile-badge:hover, .user-profile-badge.active {
+          border-color: var(--primary);
+          background: var(--surface-hover);
+          box-shadow: 0 0 12px rgba(99, 102, 241, 0.25);
         }
 
         .user-avatar-round {
@@ -251,7 +260,12 @@ export default function AppHeader({
             </button>
 
             {user && (
-              <div className="user-profile-badge" title={`Signed in as ${user.email || user.name}`}>
+              <button
+                type="button"
+                className={`user-profile-badge${activeTab === 'profile' ? ' active' : ''}`}
+                onClick={() => onTabChange && onTabChange('profile')}
+                title="View & Edit Profile Details (Phone, DOB, Tech Stack, etc.)"
+              >
                 {user.avatar_url ? (
                   <img src={user.avatar_url} alt={user.name || 'User'} className="user-avatar-round" />
                 ) : (
@@ -263,7 +277,7 @@ export default function AppHeader({
                 {user.github?.username && (
                   <span className="user-gh-pill">@{user.github.username}</span>
                 )}
-              </div>
+              </button>
             )}
 
             {user && (

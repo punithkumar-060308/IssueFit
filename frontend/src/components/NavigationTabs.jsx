@@ -1,4 +1,4 @@
-import { Compass, Trophy } from 'lucide-react'
+import { Compass, Trophy, User } from 'lucide-react'
 
 export default function NavigationTabs({ activeTab, onTabChange }) {
   return (
@@ -67,8 +67,16 @@ export default function NavigationTabs({ activeTab, onTabChange }) {
           <Trophy size={16} />
           <span>Leaderboard</span>
         </button>
+        <button
+          type="button"
+          className={`nav-tab-item${activeTab === 'profile' ? ' active' : ''}`}
+          onClick={() => onTabChange('profile')}
+          aria-current={activeTab === 'profile' ? 'page' : undefined}
+        >
+          <User size={16} />
+          <span>Profile</span>
+        </button>
       </nav>
     </>
   )
 }
-

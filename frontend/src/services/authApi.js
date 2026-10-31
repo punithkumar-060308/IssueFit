@@ -69,6 +69,31 @@ export async function logout() {
   return response.json()
 }
 
+export async function updateProfile(profileData) {
+  const token = getStoredToken()
+  const headers = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  }
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
+  const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers,
+    body: JSON.stringify(profileData),
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}))
+    throw new Error(errorData.detail || 'Failed to update profile')
+  }
+
+  return response.json()
+}
+
 export function startGoogleLogin() {
   window.location.assign(`${API_BASE_URL}/auth/google/login`)
 }

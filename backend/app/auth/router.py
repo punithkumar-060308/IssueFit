@@ -1,7 +1,8 @@
 import logging
 import uuid
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Optional, List
+from pydantic import BaseModel, Field
 from fastapi import APIRouter, Request, Response, HTTPException, status
 from fastapi.responses import RedirectResponse, JSONResponse
 
@@ -20,7 +21,7 @@ from app.core.security import generate_session_id, generate_oauth_state, encrypt
 from app.database.mongodb import db
 from app.auth.google import get_google_auth_url, exchange_google_code, fetch_google_user_info
 from app.auth.github import get_github_auth_url, exchange_github_code, fetch_github_user_info
-from app.auth.dependencies import get_current_user_optional
+from app.auth.dependencies import get_current_user_optional, require_authenticated_user
 
 logger = logging.getLogger("issuefit.auth")
 auth_router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -391,6 +392,16 @@ async def github_connect(request: Request):
 # -------------------------------------------------------------
 # User & Session State
 # -------------------------------------------------------------
+class UpdateProfileRequest(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    dob: Optional[str] = None
+    bio: Optional[str] = None
+    location: Optional[str] = None
+    experience_level: Optional[str] = None
+    skills: Optional[List[str]] = None
+
+
 @auth_router.get("/me")
 async def get_me(request: Request):
     user = await get_current_user_optional(request)
@@ -411,6 +422,12 @@ async def get_me(request: Request):
             "name": user.get("name"),
             "email": user.get("email"),
             "avatar_url": user.get("avatar_url"),
+            "phone": user.get("phone", ""),
+            "dob": user.get("dob", ""),
+            "bio": user.get("bio", ""),
+            "location": user.get("location", ""),
+            "experience_level": user.get("experience_level", "Beginner"),
+            "skills": user.get("skills", []),
             "github": {
                 "connected": is_connected,
                 "username": gh_ident.get("username") if is_connected else None,
@@ -418,6 +435,67 @@ async def get_me(request: Request):
             },
         },
         "requires_github_connection": False,
+    }
+
+
+@auth_router.patch("/profile")
+@auth_router.put("/profile")
+async def update_profile(body: UpdateProfileRequest, request: Request):
+    user = await require_authenticated_user(request)
+    user_id = str(user["_id"])
+
+    update_fields = {}
+    if body.name is not None:
+        clean_name = body.name.strip()
+        if clean_name:
+            update_fields["name"] = clean_name
+    if body.phone is not None:
+        update_fields["phone"] = body.phone.strip()
+    if body.dob is not None:
+        update_fields["dob"] = body.dob.strip()
+    if body.bio is not None:
+        update_fields["bio"] = body.bio.strip()
+    if body.location is not None:
+        update_fields["location"] = body.location.strip()
+    if body.experience_level is not None:
+        update_fields["experience_level"] = body.experience_level.strip()
+    if body.skills is not None:
+        update_fields["skills"] = [s.strip() for s in body.skills if s.strip()]
+
+    if update_fields:
+        update_fields["updated_at"] = datetime.now(timezone.utc).isoformat()
+        await db.users.update_one(
+            {"_id": user_id},
+            {"$set": update_fields}
+        )
+
+    updated_user = await db.users.find_one({"_id": user_id})
+    if not updated_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    is_connected = bool(updated_user.get("github_connection", {}).get("connected"))
+    gh_ident = updated_user.get("identities", {}).get("github") or {}
+
+    return {
+        "success": True,
+        "message": "Profile updated successfully",
+        "user": {
+            "id": str(updated_user.get("_id")),
+            "name": updated_user.get("name"),
+            "email": updated_user.get("email"),
+            "avatar_url": updated_user.get("avatar_url"),
+            "phone": updated_user.get("phone", ""),
+            "dob": updated_user.get("dob", ""),
+            "bio": updated_user.get("bio", ""),
+            "location": updated_user.get("location", ""),
+            "experience_level": updated_user.get("experience_level", "Beginner"),
+            "skills": updated_user.get("skills", []),
+            "github": {
+                "connected": is_connected,
+                "username": gh_ident.get("username") if is_connected else None,
+                "profile_url": gh_ident.get("profile_url") if is_connected else None,
+            },
+        },
     }
 
 

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import { getCurrentUser, logout, setStoredToken } from '../services/authApi'
+import { getCurrentUser, logout, setStoredToken, updateProfile } from '../services/authApi'
 
 const AuthContext = createContext(null)
 
@@ -61,6 +61,14 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
+  const updateUserProfile = useCallback(async (profileData) => {
+    const res = await updateProfile(profileData)
+    if (res && res.user) {
+      setUser(res.user)
+    }
+    return res
+  }, [])
+
   useEffect(() => {
     checkAuth()
   }, [checkAuth])
@@ -75,6 +83,7 @@ export function AuthProvider({ children }) {
         error,
         checkAuth,
         logoutUser,
+        updateUserProfile,
       }}
     >
       {children}
