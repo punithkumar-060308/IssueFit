@@ -22,8 +22,9 @@ app = FastAPI(
     description="Find open-source issues that fit a contributor's public GitHub skills.",
 )
 
+# Defensively sanitize CORS origins to ensure no trailing slashes break browser Origin matching
 allowed_origins = [
-    origin.strip()
+    origin.strip().rstrip("/")
     for origin in f"{FRONTEND_ORIGIN},{FRONTEND_URL}".split(",")
     if origin.strip()
 ]
@@ -32,8 +33,9 @@ for default_origin in [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]:
-    if default_origin not in allowed_origins:
-        allowed_origins.append(default_origin)
+    cleaned = default_origin.rstrip("/")
+    if cleaned not in allowed_origins:
+        allowed_origins.append(cleaned)
 
 app.add_middleware(
     CORSMiddleware,

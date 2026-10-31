@@ -1,7 +1,10 @@
 from __future__ import annotations
+import base64
+import logging
 import httpx
 from app.config import GITHUB_TOKEN
 
+logger = logging.getLogger("issuefit.github")
 GITHUB_API = "https://api.github.com"
 
 
@@ -100,3 +103,64 @@ async def fetch_open_issues(owner: str, repo: str, limit: int = 300) -> list[dic
         if len(results) >= limit:
             break
     return results[:limit]
+
+
+async def fetch_single_issue(owner: str, repo: str, issue_number: int) -> dict:
+    """Fetch details for a specific issue from GitHub."""
+    result = await _github_get(f"/repos/{owner}/{repo}/issues/{issue_number}")
+    if isinstance(result, dict) and result.get("pull_request") is not None:
+        raise GitHubAPIError(404, f"Item #{issue_number} is a pull request, not an issue.", code="NOT_FOUND")
+    return result  # type: ignore[return-value]
+
+
+async def fetch_issue_comments(owner: str, repo: str, issue_number: int, limit: int = 10) -> list[dict]:
+    """Fetch comments for a specific issue (best-effort, returns empty list on error)."""
+    try:
+        result = await _github_get(
+            f"/repos/{owner}/{repo}/issues/{issue_number}/comments",
+            params={"per_page": min(limit, 30), "direction": "asc"},
+        )
+        if isinstance(result, list):
+            return result
+        return []
+    except Exception as e:
+        logger.warning(f"Could not fetch comments for {owner}/{repo}#{issue_number}: {e}")
+        return []
+
+
+async def fetch_repository_readme(owner: str, repo: str) -> str | None:
+    """Fetch repository README content decoded as string (best-effort, returns None if not found)."""
+    try:
+        result = await _github_get(f"/repos/{owner}/{repo}/readme")
+        if isinstance(result, dict) and "content" in result:
+            encoding = result.get("encoding", "base64")
+            if encoding == "base64":
+                raw_bytes = base64.b64decode(result["content"])
+                return raw_bytes.decode("utf-8", errors="replace")
+            return str(result.get("content"))
+        return None
+    except Exception as e:
+        logger.warning(f"Could not fetch README for {owner}/{repo}: {e}")
+        return None
+
+
+async def fetch_repository_tree(owner: str, repo: str, branch: str = "main", max_files: int = 150) -> list[str]:
+    """Fetch repository tree to get verified file paths for hallucination prevention."""
+    try:
+        result = await _github_get(
+            f"/repos/{owner}/{repo}/git/trees/{branch}",
+            params={"recursive": "1"},
+        )
+        if isinstance(result, dict) and "tree" in result:
+            paths: list[str] = []
+            for item in result.get("tree", []):
+                p = item.get("path")
+                if p:
+                    paths.append(p)
+                    if len(paths) >= max_files:
+                        break
+            return paths
+        return []
+    except Exception as e:
+        logger.warning(f"Could not fetch git tree for {owner}/{repo} on branch {branch}: {e}")
+        return []

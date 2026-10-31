@@ -2,10 +2,12 @@ import { useState } from 'react'
 import { ExternalLink, Hash, ChevronDown, ChevronUp, Sparkles, FolderGit2 } from 'lucide-react'
 import ScoreBadge from './ScoreBadge'
 import DifficultyBadge from './DifficultyBadge'
-import { isValidGitHubIssueUrl } from '../utils/formatters'
+import { isValidGitHubIssueUrl, parseIssueOwnerAndRepo } from '../utils/formatters'
+import IssueBreakdownModal from './breakdown/IssueBreakdownModal'
 
 export default function IssueRow({ issue }) {
   const [expanded, setExpanded] = useState(false)
+  const [showBreakdown, setShowBreakdown] = useState(false)
 
   const {
     number,
@@ -24,6 +26,7 @@ export default function IssueRow({ issue }) {
 
   const safeUrl = isValidGitHubIssueUrl(url) ? url : null
   const isOpen = (state || 'open').toLowerCase() === 'open'
+  const parsedRepo = parseIssueOwnerAndRepo(issue)
 
   return (
     <>
@@ -217,6 +220,29 @@ export default function IssueRow({ issue }) {
           white-space: nowrap;
         }
 
+        .row-understand-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 12px;
+          border-radius: var(--radius-sm);
+          font-size: 12px;
+          font-weight: 700;
+          background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(6, 182, 212, 0.15) 100%);
+          color: #a5b4fc;
+          border: 1px solid var(--border-accent);
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .row-understand-btn:hover {
+          background: linear-gradient(135deg, rgba(99, 102, 241, 0.28) 0%, rgba(6, 182, 212, 0.28) 100%);
+          color: #ffffff;
+          border-color: var(--primary);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+        }
+
         .action-inspect-btn:hover {
           background: var(--primary);
           color: #ffffff;
@@ -389,9 +415,33 @@ export default function IssueRow({ issue }) {
                   </div>
                 </div>
               )}
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginTop: 10 }}>
+                <button
+                  type="button"
+                  className="row-understand-btn"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setShowBreakdown(true)
+                  }}
+                  title="Get maintainer-level guidance & breakdown"
+                >
+                  <Sparkles size={13} />
+                  <span>Understand this issue</span>
+                </button>
+              </div>
             </div>
           </td>
         </tr>
+      )}
+
+      {showBreakdown && parsedRepo && (
+        <IssueBreakdownModal
+          issue={issue}
+          owner={parsedRepo.owner}
+          repo={parsedRepo.repo}
+          onClose={() => setShowBreakdown(false)}
+        />
       )}
     </>
   )

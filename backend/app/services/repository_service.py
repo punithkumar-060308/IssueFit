@@ -19,6 +19,11 @@ def parse_github_url(url: str) -> tuple[str, str]:
     if not raw:
         raise ValueError("URL cannot be empty.")
 
+    if "://" in raw:
+        parsed = urlparse(raw)
+        if parsed.netloc.lower() not in ("github.com", "www.github.com"):
+            raise ValueError("Only GitHub URLs are supported.")
+
     # Strip SSH prefix git@github.com:
     if raw.startswith("git@github.com:"):
         raw = raw.replace("git@github.com:", "")

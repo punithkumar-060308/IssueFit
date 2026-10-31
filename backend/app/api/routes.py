@@ -15,6 +15,9 @@ from app.schemas import (
     RepositoryInfo,
     TrendingResponse,
     LeaderboardResponse,
+    IssueBreakdownRequest,
+    IssueBreakdownResponse,
+    ErrorDetail,
 )
 from app.services.github_client import (
     fetch_user,
@@ -24,6 +27,14 @@ from app.services.github_client import (
 from app.services.contributor_service import build_contributor_profile
 from app.services.issue_service import get_open_issues
 from app.services.repository_service import validate_and_fetch_repository, parse_github_url
+from app.services.breakdown_service import get_or_generate_issue_breakdown
+from app.services.ai_service import (
+    AIConfigurationError,
+    AIRateLimitError,
+    AITimeoutError,
+    AIServiceError,
+    AIResponseValidationError,
+)
 from app.core.filters import filter_issues
 from app.core.recommender import rank_issues, SCORING_VERSION
 from app.storage.cache import get as cache_get, set as cache_set
@@ -39,6 +50,17 @@ def _error_response(status_code: int, code: str, message: str) -> JSONResponse:
             "success": False,
             "error": {"code": code, "message": message},
             "recommendations": [],
+        },
+    )
+
+
+def _breakdown_error_response(status_code: int, code: str, message: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "success": False,
+            "error": {"code": code, "message": message},
+            "breakdown": None,
         },
     )
 
@@ -172,6 +194,61 @@ async def recommend(
         ),
     )
     return response
+
+
+@router.post("/issues/breakdown", response_model=IssueBreakdownResponse)
+async def breakdown_issue(
+    request: IssueBreakdownRequest,
+    current_user: dict = Depends(require_github_connected_user),
+):
+    """
+    Generate an AI-powered structured technical breakdown of a GitHub issue.
+    Analyzes the issue, repo context, README, and comments to guide the contributor.
+    """
+    req = request.clean()
+
+    try:
+        data, is_cached = await get_or_generate_issue_breakdown(
+            owner=req.owner,
+            repo=req.repo,
+            issue_number=req.issue_number,
+        )
+        return IssueBreakdownResponse(
+            success=True,
+            owner=req.owner,
+            repo=req.repo,
+            issue_number=req.issue_number,
+            cached=is_cached,
+            breakdown=data,
+        )
+    except GitHubAPIError as exc:
+        if exc.code == "GITHUB_RATE_LIMIT" or exc.status_code in (403, 429):
+            return _breakdown_error_response(
+                429, "GITHUB_RATE_LIMIT", "GitHub rate limit reached. Please try again later."
+            )
+        if exc.code == "NOT_FOUND" or exc.status_code == 404:
+            return _breakdown_error_response(
+                404, "NOT_FOUND", f"Issue #{req.issue_number} or repository {req.owner}/{req.repo} was not found."
+            )
+        if exc.status_code >= 500:
+            return _breakdown_error_response(
+                502, "GITHUB_UNAVAILABLE", "GitHub is temporarily unavailable. Please try again."
+            )
+        return _breakdown_error_response(502, "GITHUB_UNAVAILABLE", exc.message)
+    except AIConfigurationError as exc:
+        return _breakdown_error_response(exc.status_code, exc.code, exc.message)
+    except AIRateLimitError as exc:
+        return _breakdown_error_response(exc.status_code, exc.code, exc.message)
+    except AITimeoutError as exc:
+        return _breakdown_error_response(exc.status_code, exc.code, exc.message)
+    except AIServiceError as exc:
+        return _breakdown_error_response(exc.status_code, exc.code, exc.message)
+    except AIResponseValidationError as exc:
+        return _breakdown_error_response(exc.status_code, exc.code, exc.message)
+    except Exception as exc:
+        return _breakdown_error_response(
+            500, "INTERNAL_ERROR", f"An unexpected error occurred while analyzing the issue: {str(exc)}"
+        )
 
 
 @router.get("/repository/{owner}/{repo}")

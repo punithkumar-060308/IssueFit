@@ -1,5 +1,6 @@
-const API_BASE_URL =
+const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+).replace(/\/+$/, '')
 
 export async function getRecommendations(payload) {
   const token = localStorage.getItem('issuefit_token')
@@ -45,6 +46,36 @@ export async function validateRepository(url) {
 
   if (!response.ok || data.success === false) {
     throw new Error(data?.error?.message || 'Repository could not be found or accessed.')
+  }
+
+  return data
+}
+
+export async function getIssueBreakdown(owner, repo, issueNumber) {
+  const response = await fetch(`${API_BASE_URL}/api/issues/breakdown`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      owner,
+      repo,
+      issue_number: Number(issueNumber),
+    }),
+  })
+
+  let data
+  try {
+    data = await response.json()
+  } catch {
+    throw new Error('Server returned an invalid response.')
+  }
+
+  if (!response.ok || data.success === false) {
+    const errorMsg = data?.error?.message || 'Could not generate issue breakdown.'
+    const err = new Error(errorMsg)
+    err.code = data?.error?.code
+    err.status = response.status
+    throw err
   }
 
   return data
