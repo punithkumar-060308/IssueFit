@@ -394,12 +394,7 @@ async def github_connect(request: Request):
 # -------------------------------------------------------------
 class UpdateProfileRequest(BaseModel):
     name: Optional[str] = None
-    phone: Optional[str] = None
-    dob: Optional[str] = None
-    bio: Optional[str] = None
-    location: Optional[str] = None
-    experience_level: Optional[str] = None
-    skills: Optional[List[str]] = None
+    github_username: Optional[str] = None
 
 
 @auth_router.get("/me")
@@ -414,6 +409,8 @@ async def get_me(request: Request):
 
     is_connected = bool(user.get("github_connection", {}).get("connected"))
     gh_ident = user.get("identities", {}).get("github") or {}
+    gh_user = gh_ident.get("username") or user.get("github_username")
+    gh_url = gh_ident.get("profile_url") or (f"https://github.com/{gh_user}" if gh_user else None)
 
     return {
         "authenticated": True,
@@ -422,19 +419,14 @@ async def get_me(request: Request):
             "name": user.get("name"),
             "email": user.get("email"),
             "avatar_url": user.get("avatar_url"),
-            "phone": user.get("phone", ""),
-            "dob": user.get("dob", ""),
-            "bio": user.get("bio", ""),
-            "location": user.get("location", ""),
-            "experience_level": user.get("experience_level", "Beginner"),
-            "skills": user.get("skills", []),
+            "github_username": gh_user,
             "github": {
-                "connected": is_connected,
-                "username": gh_ident.get("username") if is_connected else None,
-                "profile_url": gh_ident.get("profile_url") if is_connected else None,
+                "connected": is_connected or bool(gh_user),
+                "username": gh_user,
+                "profile_url": gh_url,
             },
         },
-        "requires_github_connection": not is_connected,
+        "requires_github_connection": False,
     }
 
 
@@ -449,18 +441,12 @@ async def update_profile(body: UpdateProfileRequest, request: Request):
         clean_name = body.name.strip()
         if clean_name:
             update_fields["name"] = clean_name
-    if body.phone is not None:
-        update_fields["phone"] = body.phone.strip()
-    if body.dob is not None:
-        update_fields["dob"] = body.dob.strip()
-    if body.bio is not None:
-        update_fields["bio"] = body.bio.strip()
-    if body.location is not None:
-        update_fields["location"] = body.location.strip()
-    if body.experience_level is not None:
-        update_fields["experience_level"] = body.experience_level.strip()
-    if body.skills is not None:
-        update_fields["skills"] = [s.strip() for s in body.skills if s.strip()]
+    if body.github_username is not None:
+        clean_gh = body.github_username.strip().lstrip("@")
+        update_fields["github_username"] = clean_gh
+        update_fields["identities.github.username"] = clean_gh
+        if clean_gh:
+            update_fields["identities.github.profile_url"] = f"https://github.com/{clean_gh}"
 
     if update_fields:
         update_fields["updated_at"] = datetime.now(timezone.utc).isoformat()
@@ -475,6 +461,8 @@ async def update_profile(body: UpdateProfileRequest, request: Request):
 
     is_connected = bool(updated_user.get("github_connection", {}).get("connected"))
     gh_ident = updated_user.get("identities", {}).get("github") or {}
+    gh_user = gh_ident.get("username") or updated_user.get("github_username")
+    gh_url = gh_ident.get("profile_url") or (f"https://github.com/{gh_user}" if gh_user else None)
 
     return {
         "success": True,
@@ -484,16 +472,11 @@ async def update_profile(body: UpdateProfileRequest, request: Request):
             "name": updated_user.get("name"),
             "email": updated_user.get("email"),
             "avatar_url": updated_user.get("avatar_url"),
-            "phone": updated_user.get("phone", ""),
-            "dob": updated_user.get("dob", ""),
-            "bio": updated_user.get("bio", ""),
-            "location": updated_user.get("location", ""),
-            "experience_level": updated_user.get("experience_level", "Beginner"),
-            "skills": updated_user.get("skills", []),
+            "github_username": gh_user,
             "github": {
-                "connected": is_connected,
-                "username": gh_ident.get("username") if is_connected else None,
-                "profile_url": gh_ident.get("profile_url") if is_connected else None,
+                "connected": is_connected or bool(gh_user),
+                "username": gh_user,
+                "profile_url": gh_url,
             },
         },
     }

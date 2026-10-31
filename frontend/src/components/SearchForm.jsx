@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
-import { Search, Loader2, Sparkles, User, FolderGit2, Link2, ArrowRight, CornerDownLeft, Terminal } from 'lucide-react'
+import { Search, Loader2, Sparkles, User, FolderGit2, Link2, ArrowRight, CornerDownLeft, Terminal, CheckCircle2 } from 'lucide-react'
 import { parseGitHubRepoUrl } from '../utils/formatters'
+import { useAuth } from '../context/AuthContext'
 
 const INITIAL = { username: '', owner: '', repo: '' }
 
@@ -12,7 +13,15 @@ const FEATURED_PRESETS = [
 ]
 
 export default function SearchForm({ onSubmit, isLoading, prefill }) {
-  const [values, setValues] = useState(prefill || INITIAL)
+  const { user } = useAuth()
+  const profileUsername = user?.github?.username || user?.github_username || ''
+
+  const [values, setValues] = useState(() => ({
+    username: prefill?.username || profileUsername || '',
+    owner: prefill?.owner || '',
+    repo: prefill?.repo || '',
+  }))
+
   const [touched, setTouched] = useState({})
   const [pastedUrl, setPastedUrl] = useState('')
   const prevPrefill = useRef(null)
@@ -20,12 +29,23 @@ export default function SearchForm({ onSubmit, isLoading, prefill }) {
   useEffect(() => {
     if (prefill && JSON.stringify(prefill) !== JSON.stringify(prevPrefill.current)) {
       prevPrefill.current = prefill
-      setValues((v) => ({ ...v, ...prefill }))
+      setValues((v) => ({
+        ...v,
+        ...prefill,
+        username: prefill.username || v.username || profileUsername,
+      }))
     }
-  }, [prefill])
+  }, [prefill, profileUsername])
 
+  useEffect(() => {
+    if (profileUsername && !values.username) {
+      setValues((v) => ({ ...v, username: profileUsername }))
+    }
+  }, [profileUsername])
+
+  const effectiveUsername = values.username.trim() || profileUsername.trim()
   const errors = {
-    username: touched.username && !values.username.trim() ? 'Contributor username is required' : '',
+    username: touched.username && !effectiveUsername ? 'Contributor username is required' : '',
     owner: touched.owner && !values.owner.trim() ? 'Repository owner is required' : '',
     repo: touched.repo && !values.repo.trim() ? 'Repository name is required' : '',
   }
@@ -65,14 +85,18 @@ export default function SearchForm({ onSubmit, isLoading, prefill }) {
 
   const handleSubmit = (e) => {
     e.preventDefault()
+    const activeUsername = values.username.trim() || profileUsername.trim()
     setTouched({ username: true, owner: true, repo: true })
-    if (!values.username.trim() || !values.owner.trim() || !values.repo.trim()) return
-    onSubmit(values)
+    if (!activeUsername || !values.owner.trim() || !values.repo.trim()) return
+    onSubmit({
+      ...values,
+      username: activeUsername,
+    })
   }
 
   const applyPreset = (preset) => {
     const data = {
-      username: preset.username,
+      username: profileUsername || preset.username,
       owner: preset.owner,
       repo: preset.repo,
     }
@@ -151,91 +175,101 @@ export default function SearchForm({ onSubmit, isLoading, prefill }) {
           align-items: center;
           gap: 6px;
           padding: 6px 12px;
-          border-radius: 9999px;
           background: var(--surface-card);
           border: 1px solid var(--border);
-          color: var(--text);
+          border-radius: 9999px;
           font-size: 12px;
           font-weight: 600;
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          color: var(--text-muted);
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
           cursor: pointer;
         }
 
         .preset-pill:hover {
+          color: var(--text);
           background: var(--surface-hover);
-          border-color: var(--border-accent);
+          border-color: var(--border-bright);
           transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
         }
 
         .preset-lang-dot {
-          width: 6px;
-          height: 6px;
+          width: 7px;
+          height: 7px;
           border-radius: 50%;
-          background: var(--accent-cyan);
         }
 
-        /* Unified Smart Input Container */
         .url-omni-bar {
-          position: relative;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          background: var(--surface-card);
+          border: 1px dashed var(--border-bright);
+          border-radius: var(--radius-sm);
+          padding: 10px 16px;
           margin-bottom: 20px;
-        }
-
-        .url-omni-input {
-          width: 100%;
-          height: 46px;
-          background: var(--surface-solid);
-          border: 1px solid var(--border);
-          border-radius: var(--radius);
-          padding: 0 16px 0 42px;
-          font-size: 14px;
-          color: var(--text);
-          font-family: inherit;
           transition: all 0.2s ease;
         }
 
-        .url-omni-input:focus {
-          outline: none;
+        .url-omni-bar:focus-within {
           border-color: var(--primary);
-          box-shadow: 0 0 0 4px var(--primary-glow);
+          border-style: solid;
+          background: var(--surface-hover);
+          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
         }
 
         .url-omni-icon {
-          position: absolute;
-          left: 14px;
-          top: 50%;
-          transform: translateY(-50%);
-          color: var(--text-muted);
-          pointer-events: none;
+          color: var(--text-subtle);
+          flex-shrink: 0;
         }
 
-        /* Bento Fields Grid */
+        .url-omni-input {
+          flex: 1;
+          background: transparent;
+          border: none;
+          outline: none;
+          color: var(--text);
+          font-size: 13px;
+          font-family: inherit;
+        }
+
+        .url-omni-input::placeholder {
+          color: var(--text-subtle);
+        }
+
         .fields-bento-grid {
           display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
+          grid-template-columns: repeat(3, 1fr);
           gap: 16px;
-          margin-bottom: 22px;
+          margin-bottom: 24px;
+        }
+
+        @media (max-width: 860px) {
+          .fields-bento-grid {
+            grid-template-columns: 1fr;
+          }
         }
 
         .bento-field-box {
           background: var(--surface-card);
           border: 1px solid var(--border);
           border-radius: var(--radius);
-          padding: 14px 16px;
-          transition: all 0.2s ease;
+          padding: 16px 18px;
           display: flex;
           flex-direction: column;
           gap: 8px;
+          transition: all 0.2s ease;
+          position: relative;
         }
 
         .bento-field-box:focus-within {
           border-color: var(--primary);
           background: var(--surface-hover);
-          box-shadow: 0 0 0 3px var(--primary-glow);
+          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
         }
 
         .bento-field-box.has-error {
           border-color: var(--danger);
+          box-shadow: 0 0 0 2px var(--danger-glow);
         }
 
         .bento-field-label {
@@ -244,23 +278,20 @@ export default function SearchForm({ onSubmit, isLoading, prefill }) {
           justify-content: space-between;
           font-size: 11px;
           font-weight: 700;
-          color: var(--text-muted);
           text-transform: uppercase;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.6px;
+          color: var(--text-muted);
         }
 
         .bento-field-input {
-          width: 100%;
           background: transparent;
           border: none;
-          color: var(--text);
-          font-size: 14px;
-          font-weight: 600;
-          padding: 0;
-        }
-
-        .bento-field-input:focus {
           outline: none;
+          color: var(--text);
+          font-size: 15px;
+          font-weight: 600;
+          font-family: inherit;
+          width: 100%;
         }
 
         .bento-field-input::placeholder {
@@ -271,97 +302,87 @@ export default function SearchForm({ onSubmit, isLoading, prefill }) {
         .bento-hint-text {
           font-size: 11px;
           color: var(--text-subtle);
-          margin-top: 2px;
         }
 
         .bento-field-error {
           font-size: 11px;
           color: var(--danger);
+          font-weight: 500;
         }
 
-        /* Submit Action Button */
         .submit-radar-btn {
           width: 100%;
           height: 48px;
+          background: var(--primary-gradient);
+          border: 1px solid rgba(255, 255, 255, 0.15);
+          border-radius: var(--radius);
+          color: #ffffff;
+          font-size: 15px;
+          font-weight: 700;
           display: flex;
           align-items: center;
           justify-content: center;
           gap: 10px;
-          background: var(--primary-gradient);
-          color: #ffffff;
-          border: none;
-          border-radius: var(--radius);
-          font-size: 15px;
-          font-weight: 700;
-          letter-spacing: -0.01em;
-          box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
           cursor: pointer;
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+          box-shadow: 0 4px 18px rgba(99, 102, 241, 0.4);
         }
 
         .submit-radar-btn:hover:not(:disabled) {
           transform: translateY(-2px);
-          box-shadow: 0 8px 25px rgba(99, 102, 241, 0.5);
+          box-shadow: 0 8px 26px rgba(99, 102, 241, 0.55);
         }
 
         .submit-radar-btn:disabled {
-          opacity: 0.65;
+          opacity: 0.6;
           cursor: not-allowed;
-          transform: none;
-          box-shadow: none;
         }
 
         .kbd-chip {
-          display: inline-flex;
-          align-items: center;
-          gap: 2px;
-          padding: 2px 6px;
           background: rgba(255, 255, 255, 0.2);
           border-radius: 4px;
-          font-size: 11px;
-          font-family: 'JetBrains Mono', monospace;
-        }
-
-        @media (max-width: 900px) {
-          .fields-bento-grid {
-            grid-template-columns: 1fr;
-          }
-          .match-console-card {
-            padding: 20px;
-          }
+          padding: 2px 6px;
+          font-size: 10px;
+          font-weight: 600;
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
         }
       `}</style>
 
       <div className="match-console-card">
         <div className="console-top-row">
           <div className="console-title-wrap">
-            <span className="console-badge">
+            <div className="console-badge">
               <Sparkles size={13} />
-              AI-Powered Match Engine
-            </span>
-            <h2 className="console-heading">Discover Tailored Issues</h2>
+              <span>Personalized Matching</span>
+            </div>
+            <h2 className="console-heading">Discover Good First Issues</h2>
           </div>
 
           <div className="presets-belt">
             <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase' }}>
-              Quick Try:
+              Quick Presets:
             </span>
-            {FEATURED_PRESETS.map((preset, idx) => (
-              <button
-                key={idx}
-                type="button"
-                className="preset-pill"
-                onClick={() => applyPreset(preset)}
-                disabled={isLoading}
-              >
-                <span className="preset-lang-dot" />
-                <span>{preset.name}</span>
-              </button>
-            ))}
+            {FEATURED_PRESETS.map((preset) => {
+              const dotColor =
+                preset.lang === 'Python' ? '#3572A5' : preset.lang === 'JavaScript' ? '#f1e05a' : '#3178c6'
+              return (
+                <button
+                  key={preset.name}
+                  type="button"
+                  className="preset-pill"
+                  onClick={() => applyPreset(preset)}
+                >
+                  <span className="preset-lang-dot" style={{ background: dotColor }} />
+                  <span>{preset.name}</span>
+                </button>
+              )
+            })}
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} noValidate>
+        <form onSubmit={handleSubmit}>
           <div className="url-omni-bar">
             <Link2 size={16} className="url-omni-icon" />
             <input
@@ -384,14 +405,22 @@ export default function SearchForm({ onSubmit, isLoading, prefill }) {
                 id="input-username"
                 type="text"
                 className="bento-field-input"
-                placeholder="e.g. octocat"
+                placeholder={profileUsername || 'e.g. octocat'}
                 value={values.username}
                 onChange={handleFieldChange('username')}
                 onBlur={handleBlur('username')}
                 autoComplete="off"
                 spellCheck={false}
               />
-              <span className="bento-hint-text">Your GitHub profile handle</span>
+              <span className="bento-hint-text">
+                {profileUsername ? (
+                  <span style={{ color: 'var(--success)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <CheckCircle2 size={11} /> Auto-fetched from profile (@{profileUsername})
+                  </span>
+                ) : (
+                  'Your GitHub profile handle'
+                )}
+              </span>
               {errors.username && <span className="bento-field-error">{errors.username}</span>}
             </div>
 
