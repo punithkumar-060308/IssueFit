@@ -3,7 +3,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from app.config import FRONTEND_ORIGIN
+from app.config import FRONTEND_ORIGIN, FRONTEND_URL
 from app.api.routes import router
 from app.auth.router import auth_router
 from app.database.mongodb import db
@@ -22,9 +22,19 @@ app = FastAPI(
     description="Find open-source issues that fit a contributor's public GitHub skills.",
 )
 
+# Defensively sanitize CORS origins to ensure no trailing slashes break browser Origin matching
+allowed_origins = list(
+    {
+        FRONTEND_ORIGIN.rstrip("/"),
+        FRONTEND_URL.rstrip("/"),
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    }
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_ORIGIN, "http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

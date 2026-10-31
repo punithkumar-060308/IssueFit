@@ -1,5 +1,6 @@
-const API_BASE_URL =
+const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+).replace(/\/+$/, '')
 
 export async function getCurrentUser() {
   const response = await fetch(`${API_BASE_URL}/auth/me`, {
@@ -40,4 +41,3 @@ export function startGitHubLogin() {
 export function startGitHubConnect() {
   window.location.assign(`${API_BASE_URL}/auth/github/connect`)
 }
-
