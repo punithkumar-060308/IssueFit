@@ -14,24 +14,75 @@
 
 ## Quick start
 
-### Frontend
-
-```bash
-cd frontend
-cp .env.example .env
-npm install
-npm run dev
-```
-
-Open <http://localhost:5173>
-
+1. Clone the repository
+git clone https://github.com/punithkumar-060308/IssueFit.git
+cd IssueFit
 ### Backend
 
-```bash
+2. Start the backend
 cd backend
+
+Create a virtual environment:
+python -m venv venv
+
+Activate it:
+.\venv\Scripts\Activate.ps1
+
+
+Install dependencies:
 pip install -r requirements.txt
+
+
+Create your .env file using .env.example:
+Copy-Item .env.example .env
+
+
+Add the required environment variables to backend/.env (especially MongoDB and any OAuth/AI credentials needed for the features you're testing).
+
+Start the server:
 uvicorn app.main:app --reload --port 8000
-```
+
+
+Backend should be available at:
+- API: http://localhost:8000
+- Swagger docs: http://localhost:8000/docs
+### Frontend
+3. Start the frontend
+Open a second PowerShell terminal:
+cd IssueFit\frontend
+
+
+Install dependencies:
+npm install
+
+
+Create the frontend environment file:
+Copy-Item .env.example .env
+
+
+Set the API URL in frontend/.env:
+VITE_API_BASE_URL=http://localhost:8000
+
+
+Start the frontend:
+npm run dev
+
+
+Open the local URL Vite prints, usually:
+
+http://localhost:5173
+4. Your terminal setup
+Terminal	Running process
+PowerShell 1	FastAPI backend — port 8000
+PowerShell 2	Vite frontend — port 5173
+
+Important: MongoDB must also be accessible using the MONGODB_URI in your backend .env. If you use MongoDB Atlas, put its connection string there.
+
+If PowerShell blocks virtual-environment activation, run this once in that terminal:
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+
+
+Then activate the environment again.
 
 ## AI Issue Breakdown
 
