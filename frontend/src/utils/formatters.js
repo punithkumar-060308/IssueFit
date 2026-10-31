@@ -63,6 +63,19 @@ export function parseGitHubRepoUrl(url) {
   }
 }
 
+export function parseIssueOwnerAndRepo(issue) {
+  if (!issue) return null
+  if (issue.repository && issue.repository.includes('/')) {
+    const [owner, repo] = issue.repository.split('/')
+    if (owner && repo) return { owner: owner.trim(), repo: repo.trim() }
+  }
+  if (issue.url) {
+    const parsed = parseGitHubRepoUrl(issue.url)
+    if (parsed) return parsed
+  }
+  return null
+}
+
 export function difficultyColor(difficulty) {
   const d = formatDifficulty(difficulty)
   if (d === 'Easy') return 'var(--success)'

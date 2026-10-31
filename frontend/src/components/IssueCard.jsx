@@ -1,9 +1,13 @@
+import { useState } from 'react'
 import { ExternalLink, Hash, Sparkles, FolderGit2 } from 'lucide-react'
 import ScoreBadge from './ScoreBadge'
 import DifficultyBadge from './DifficultyBadge'
-import { isValidGitHubIssueUrl } from '../utils/formatters'
+import { isValidGitHubIssueUrl, parseIssueOwnerAndRepo } from '../utils/formatters'
+import IssueBreakdownModal from './breakdown/IssueBreakdownModal'
 
 export default function IssueCard({ issue }) {
+  const [showBreakdown, setShowBreakdown] = useState(false)
+
   const {
     number,
     title,
@@ -21,6 +25,7 @@ export default function IssueCard({ issue }) {
 
   const safeUrl = isValidGitHubIssueUrl(url) ? url : null
   const isOpen = (state || 'open').toLowerCase() === 'open'
+  const parsedRepo = parseIssueOwnerAndRepo(issue)
 
   return (
     <>
@@ -145,27 +150,54 @@ export default function IssueCard({ issue }) {
         .card-footer-action {
           margin-top: auto;
           display: flex;
+          align-items: center;
           justify-content: flex-end;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+
+        .card-understand-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 14px;
+          border-radius: var(--radius-sm);
+          font-size: 12.5px;
+          font-weight: 700;
+          background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(6, 182, 212, 0.15) 100%);
+          color: #a5b4fc;
+          border: 1px solid var(--border-accent);
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .card-understand-btn:hover {
+          background: linear-gradient(135deg, rgba(99, 102, 241, 0.28) 0%, rgba(6, 182, 212, 0.28) 100%);
+          color: #ffffff;
+          border-color: var(--primary);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
         }
 
         .card-view-btn {
           display: inline-flex;
           align-items: center;
           gap: 6px;
-          padding: 8px 16px;
+          padding: 8px 14px;
           border-radius: var(--radius-sm);
-          font-size: 13px;
+          font-size: 12.5px;
           font-weight: 700;
-          background: var(--primary-gradient);
-          color: #ffffff;
-          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+          background: var(--surface-hover);
+          color: var(--text);
+          border: 1px solid var(--border);
           transition: all 0.2s ease;
           text-decoration: none;
         }
 
         .card-view-btn:hover {
           transform: translateY(-1px);
-          box-shadow: 0 6px 16px rgba(99, 102, 241, 0.45);
+          border-color: var(--border-bright);
+          color: #ffffff;
         }
       `}</style>
 
@@ -212,6 +244,16 @@ export default function IssueCard({ issue }) {
         )}
 
         <div className="card-footer-action">
+          <button
+            type="button"
+            className="card-understand-btn"
+            onClick={() => setShowBreakdown(true)}
+            title="Get maintainer-level guidance & breakdown"
+          >
+            <Sparkles size={13} />
+            <span>Understand this issue</span>
+          </button>
+
           {safeUrl ? (
             <a
               href={safeUrl}
@@ -220,13 +262,22 @@ export default function IssueCard({ issue }) {
               className="card-view-btn"
             >
               <span>View on GitHub</span>
-              <ExternalLink size={13} />
+              <ExternalLink size={12} />
             </a>
           ) : (
             <span style={{ fontSize: 12, color: 'var(--text-subtle)' }}>No URL available</span>
           )}
         </div>
       </article>
+
+      {showBreakdown && parsedRepo && (
+        <IssueBreakdownModal
+          issue={issue}
+          owner={parsedRepo.owner}
+          repo={parsedRepo.repo}
+          onClose={() => setShowBreakdown(false)}
+        />
+      )}
     </>
   )
 }
