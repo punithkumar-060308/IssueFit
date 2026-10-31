@@ -6,7 +6,15 @@ from app.database.mongodb import db
 
 
 async def get_current_user_optional(request: Request) -> Optional[Dict[str, Any]]:
+    # 1. Check HTTP-only cookie
     session_id = request.cookies.get(SESSION_COOKIE_NAME)
+
+    # 2. Check Authorization Bearer header (for seamless cross-domain Vercel <-> Render auth)
+    if not session_id:
+        auth_header = request.headers.get("Authorization") or request.headers.get("authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            session_id = auth_header.split(" ", 1)[1].strip()
+
     if not session_id:
         return None
 
@@ -47,4 +55,3 @@ async def require_authenticated_user(request: Request) -> Dict[str, Any]:
 async def require_github_connected_user(request: Request) -> Dict[str, Any]:
     # Allow any authenticated user (Google or GitHub)
     return await require_authenticated_user(request)
-

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import { getCurrentUser, logout } from '../services/authApi'
+import { getCurrentUser, logout, setStoredToken } from '../services/authApi'
 
 const AuthContext = createContext(null)
 
@@ -11,6 +11,20 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState(null)
 
   const checkAuth = useCallback(async () => {
+    // Intercept token from OAuth redirect query param if present
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const token = params.get('token')
+      if (token) {
+        setStoredToken(token)
+        params.delete('token')
+        const newSearch = params.toString() ? `?${params.toString()}` : ''
+        window.history.replaceState({}, '', `${window.location.pathname}${newSearch}`)
+      }
+    } catch {
+      // Ignore URL parsing errors
+    }
+
     setIsLoading(true)
     setError(null)
     try {
@@ -43,7 +57,6 @@ export function AuthProvider({ children }) {
       setUser(null)
       setIsAuthenticated(false)
       setRequiresGitHubConnection(false)
-      // Redirect to login or home
       window.location.href = '/'
     }
   }, [])
@@ -76,4 +89,3 @@ export function useAuth() {
   }
   return context
 }
-

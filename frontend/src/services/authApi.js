@@ -1,11 +1,43 @@
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
+export function getStoredToken() {
+  try {
+    return localStorage.getItem('issuefit_token')
+  } catch {
+    return null
+  }
+}
+
+export function setStoredToken(token) {
+  try {
+    if (token) {
+      localStorage.setItem('issuefit_token', token)
+    }
+  } catch {
+    // Ignore storage quota / incognito errors
+  }
+}
+
+export function clearStoredToken() {
+  try {
+    localStorage.removeItem('issuefit_token')
+  } catch {
+    // Ignore errors
+  }
+}
+
 export async function getCurrentUser() {
+  const token = getStoredToken()
+  const headers = { Accept: 'application/json' }
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
   const response = await fetch(`${API_BASE_URL}/auth/me`, {
     method: 'GET',
     credentials: 'include',
-    headers: { Accept: 'application/json' },
+    headers,
   })
 
   if (!response.ok) {
@@ -16,11 +48,19 @@ export async function getCurrentUser() {
 }
 
 export async function logout() {
+  const token = getStoredToken()
+  const headers = { Accept: 'application/json' }
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
   const response = await fetch(`${API_BASE_URL}/auth/logout`, {
     method: 'POST',
     credentials: 'include',
-    headers: { Accept: 'application/json' },
+    headers,
   })
+
+  clearStoredToken()
 
   if (!response.ok) {
     throw new Error('Logout failed')
@@ -40,4 +80,3 @@ export function startGitHubLogin() {
 export function startGitHubConnect() {
   window.location.assign(`${API_BASE_URL}/auth/github/connect`)
 }
-

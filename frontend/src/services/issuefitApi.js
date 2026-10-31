@@ -2,10 +2,16 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
 export async function getRecommendations(payload) {
+  const token = localStorage.getItem('issuefit_token')
+  const headers = { 'Content-Type': 'application/json' }
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
   const response = await fetch(`${API_BASE_URL}/api/recommend`, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(payload),
   })
 
@@ -61,16 +67,5 @@ export async function getTrending() {
     return await response.json()
   } catch {
     return null
-  }
-}
-
-export async function checkBackendHealth() {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/health`)
-    if (!response.ok) return false
-    const data = await response.json()
-    return data.status === 'ok'
-  } catch {
-    return false
   }
 }

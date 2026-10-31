@@ -6,6 +6,7 @@ from fastapi import APIRouter, Request, Response, HTTPException, status
 from fastapi.responses import RedirectResponse, JSONResponse
 
 from app.config import (
+    APP_ENV,
     FRONTEND_URL,
     COOKIE_SECURE,
     COOKIE_SAMESITE,
@@ -25,14 +26,28 @@ logger = logging.getLogger("issuefit.auth")
 auth_router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-def _set_session_cookie(response: Response, session_id: str):
+def _set_session_cookie(response: Response, session_id: str, request: Optional[Request] = None):
+    # Detect if request is running over HTTPS or in production (e.g. Render)
+    is_secure = True
+    if request:
+        proto = request.headers.get("x-forwarded-proto") or request.url.scheme or ""
+        host = request.headers.get("x-forwarded-host") or request.headers.get("host") or ""
+        if "localhost" in host or "127.0.0.1" in host:
+            is_secure = False
+    elif not COOKIE_SECURE and APP_ENV == "development":
+        is_secure = False
+
+    secure = True if is_secure else COOKIE_SECURE
+    # Cross-domain cookies between *.vercel.app and *.onrender.com require SameSite=None and Secure=True
+    samesite = "none" if is_secure else "lax"
+
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=session_id,
         max_age=7 * 24 * 3600,
         httponly=True,
-        secure=COOKIE_SECURE,
-        samesite=COOKIE_SAMESITE,
+        secure=secure,
+        samesite=samesite,
         path="/",
     )
 
@@ -50,8 +65,11 @@ def _resolve_redirect_uri(request: Request, configured_uri: str, path: str) -> s
         return configured_uri
 
     # Detect live host from reverse proxy / Render headers
-    host = request.headers.get("x-forwarded-host") or request.headers.get("host")
-    proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "https"
+    raw_host = request.headers.get("x-forwarded-host") or request.headers.get("host") or ""
+    host = raw_host.split(",")[0].strip()
+    raw_proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "https"
+    proto = raw_proto.split(",")[0].strip()
+
     if host and "localhost" not in host and "127.0.0.1" not in host:
         return f"{proto}://{host}{path}"
 
@@ -62,8 +80,8 @@ def _resolve_frontend_url(request: Request) -> str:
     if FRONTEND_URL and "localhost" not in FRONTEND_URL and "127.0.0.1" not in FRONTEND_URL:
         return FRONTEND_URL
 
-    host = request.headers.get("x-forwarded-host") or request.headers.get("host")
-    if host and ("render.com" in host or "issuefit" in host):
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or ""
+    if "render.com" in host or "issuefit" in host:
         return "https://issue-fit.vercel.app"
 
     return FRONTEND_URL
@@ -169,9 +187,10 @@ async def google_callback(
         "expires_at": session_expires.isoformat(),
     })
 
-    dest_url = f"{frontend_url}/"
+    # Pass session token in URL as well to ensure flawless login even if third-party cookies are blocked by browser
+    dest_url = f"{frontend_url}/?token={session_id}"
     redirect_resp = RedirectResponse(url=dest_url, status_code=status.HTTP_302_FOUND)
-    _set_session_cookie(redirect_resp, session_id)
+    _set_session_cookie(redirect_resp, session_id, request=request)
     return redirect_resp
 
 
@@ -281,8 +300,9 @@ async def github_callback(
             "expires_at": new_expires.isoformat(),
         })
 
-        redirect_resp = RedirectResponse(url=f"{frontend_url}/", status_code=status.HTTP_302_FOUND)
-        _set_session_cookie(redirect_resp, new_session_id)
+        dest_url = f"{frontend_url}/?token={new_session_id}"
+        redirect_resp = RedirectResponse(url=dest_url, status_code=status.HTTP_302_FOUND)
+        _set_session_cookie(redirect_resp, new_session_id, request=request)
         return redirect_resp
 
     # Flow 2: GitHub Sign In (action == "github_login")
@@ -336,8 +356,9 @@ async def github_callback(
         "expires_at": session_expires.isoformat(),
     })
 
-    redirect_resp = RedirectResponse(url=f"{frontend_url}/", status_code=status.HTTP_302_FOUND)
-    _set_session_cookie(redirect_resp, session_id)
+    dest_url = f"{frontend_url}/?token={session_id}"
+    redirect_resp = RedirectResponse(url=dest_url, status_code=status.HTTP_302_FOUND)
+    _set_session_cookie(redirect_resp, session_id, request=request)
     return redirect_resp
 
 
@@ -365,85 +386,6 @@ async def github_connect(request: Request):
         "expires_at": expires_at.isoformat(),
     })
     return RedirectResponse(get_github_auth_url(state, is_connect=True, custom_redirect_uri=redirect_uri))
-
-
-@auth_router.get("/github/connect/callback")
-async def github_connect_callback(
-    request: Request,
-    code: Optional[str] = None,
-    state: Optional[str] = None,
-    error: Optional[str] = None,
-):
-    if error or not code or not state:
-        return RedirectResponse(f"{FRONTEND_URL}/connect-github?error=cancelled")
-
-    state_record = await db.oauth_states.find_one({"state": state, "action": "github_connect"})
-    if not state_record:
-        return RedirectResponse(f"{FRONTEND_URL}/connect-github?error=invalid_state")
-
-    bound_user_id = state_record.get("user_id")
-    await db.oauth_states.delete_one({"state": state})
-
-    try:
-        token_data = await exchange_github_code(code, is_connect=True)
-        gh_user = await fetch_github_user_info(token_data.get("access_token"))
-    except Exception as exc:
-        logger.error(f"GitHub connect token error: {exc}")
-        return RedirectResponse(f"{FRONTEND_URL}/connect-github?error=auth_failed")
-
-    gh_id = int(gh_user["id"])
-    gh_login = gh_user.get("login")
-    gh_url = gh_user.get("html_url")
-    encrypted_token = encrypt_token(token_data.get("access_token", ""))
-
-    # Safe Account Linking: Check if this GitHub ID is already linked to another IssueFit user
-    existing_user_with_gh = await db.users.find_one({"identities.github.id": gh_id})
-    if existing_user_with_gh and str(existing_user_with_gh.get("_id")) != str(bound_user_id):
-        logger.warning(
-            f"GitHub linking conflict: GitHub ID {gh_id} is already linked to user {existing_user_with_gh.get('_id')}"
-        )
-        return RedirectResponse(
-            f"{FRONTEND_URL}/connect-github?error=conflict&message=This+GitHub+account+is+already+linked+to+another+IssueFit+user."
-        )
-
-    # Link GitHub identity to current user
-    now_iso = datetime.now(timezone.utc).isoformat()
-    await db.users.update_one(
-        {"_id": bound_user_id},
-        {
-            "$set": {
-                "identities.github": {
-                    "id": gh_id,
-                    "username": gh_login,
-                    "profile_url": gh_url,
-                },
-                "github_connection": {
-                    "connected": True,
-                    "token_encrypted": encrypted_token,
-                    "scopes": ["read:user"],
-                },
-                "updated_at": now_iso,
-            }
-        },
-    )
-
-    # Rotate session
-    current_session_id = request.cookies.get(SESSION_COOKIE_NAME)
-    if current_session_id:
-        await db.sessions.delete_one({"session_id": current_session_id})
-
-    new_session_id = generate_session_id()
-    new_expires = datetime.now(timezone.utc) + timedelta(days=7)
-    await db.sessions.insert_one({
-        "session_id": new_session_id,
-        "user_id": bound_user_id,
-        "created_at": now_iso,
-        "expires_at": new_expires.isoformat(),
-    })
-
-    redirect_resp = RedirectResponse(url=f"{FRONTEND_URL}/", status_code=status.HTTP_302_FOUND)
-    _set_session_cookie(redirect_resp, new_session_id)
-    return redirect_resp
 
 
 # -------------------------------------------------------------
@@ -482,10 +424,14 @@ async def get_me(request: Request):
 @auth_router.post("/logout")
 async def logout(request: Request):
     session_id = request.cookies.get(SESSION_COOKIE_NAME)
+    if not session_id:
+        auth_header = request.headers.get("Authorization") or request.headers.get("authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            session_id = auth_header.split(" ", 1)[1].strip()
+
     if session_id:
         await db.sessions.delete_one({"session_id": session_id})
 
     response = JSONResponse(content={"success": True, "message": "Logged out successfully"})
     _clear_session_cookie(response)
     return response
-
