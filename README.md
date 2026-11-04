@@ -2,7 +2,7 @@
 
 **IssueFit** helps contributors discover suitable open-source GitHub issues by matching their skills to repository needs, and provides maintainer-level AI issue breakdowns to guide them through solving complex issues.
 
-## Stack
+## Stack...
 
 | Layer    | Technology                |
 |----------|---------------------------|
