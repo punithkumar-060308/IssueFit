@@ -135,7 +135,7 @@ export default function DiscoverPage({ searchQuery, connectedRepo }) {
         }
 
         .hero-headline {
-          font-size: 32px;
+          font-size: clamp(22px, 5vw, 32px);
           font-weight: 800;
           color: var(--text);
           letter-spacing: -0.035em;
@@ -170,6 +170,7 @@ export default function DiscoverPage({ searchQuery, connectedRepo }) {
           border: none;
           transition: all 0.15s ease;
           cursor: pointer;
+          touch-action: manipulation;
         }
 
         .view-toggle-btn:hover {
@@ -203,6 +204,7 @@ export default function DiscoverPage({ searchQuery, connectedRepo }) {
           display: flex;
           flex-direction: column;
           gap: 3px;
+          min-width: 0;
         }
 
         .connected-title {
@@ -212,6 +214,7 @@ export default function DiscoverPage({ searchQuery, connectedRepo }) {
           display: flex;
           align-items: center;
           gap: 8px;
+          word-break: break-all;
         }
 
         .connected-desc {
@@ -226,12 +229,37 @@ export default function DiscoverPage({ searchQuery, connectedRepo }) {
           gap: 12px;
           font-size: 12px;
           color: var(--text-secondary);
+          flex-wrap: wrap;
         }
 
         .results-bento-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+          grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
           gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+          .discover-hero-header {
+            margin-bottom: 16px;
+            gap: 12px;
+          }
+
+          .hero-subheadline {
+            font-size: 13px;
+          }
+
+          .connected-hero-banner {
+            padding: 14px 16px;
+            gap: 12px;
+            flex-direction: column;
+            align-items: flex-start;
+            margin-bottom: 16px;
+          }
+
+          .results-bento-grid {
+            grid-template-columns: 1fr;
+            gap: 14px;
+          }
         }
       `}</style>
 

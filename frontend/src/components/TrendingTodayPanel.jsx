@@ -72,6 +72,13 @@ export default function TrendingTodayPanel() {
           box-shadow: var(--shadow-glass);
         }
 
+        @media (max-width: 640px) {
+          .trending-station-card {
+            padding: 18px 16px;
+            border-radius: var(--radius-lg);
+          }
+        }
+
         .trending-header-row {
           display: flex;
           align-items: center;

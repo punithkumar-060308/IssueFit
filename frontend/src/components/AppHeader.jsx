@@ -20,14 +20,14 @@ export default function AppHeader({
           position: sticky;
           top: 0;
           z-index: 100;
-          background: rgba(6, 8, 19, 0.75);
+          background: rgba(6, 8, 19, 0.85);
           backdrop-filter: blur(24px);
           -webkit-backdrop-filter: blur(24px);
           border-bottom: 1px solid var(--border);
         }
 
         [data-theme="light"] .header-floating-bar {
-          background: rgba(255, 255, 255, 0.85);
+          background: rgba(255, 255, 255, 0.9);
         }
 
         .header-inner {
@@ -38,24 +38,25 @@ export default function AppHeader({
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 24px;
+          gap: 20px;
         }
 
         .header-brand-group {
           display: flex;
           align-items: center;
-          gap: 32px;
+          gap: 28px;
         }
 
         .brand-link {
           display: flex;
           align-items: center;
-          gap: 12px;
+          gap: 10px;
           text-decoration: none;
           color: var(--text);
           font-weight: 800;
           font-size: 19px;
           letter-spacing: -0.03em;
+          flex-shrink: 0;
         }
 
         .brand-logo-gem {
@@ -69,6 +70,7 @@ export default function AppHeader({
           color: #ffffff;
           box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
           position: relative;
+          flex-shrink: 0;
         }
 
         .brand-pulse-dot {
@@ -100,10 +102,15 @@ export default function AppHeader({
           text-transform: uppercase;
         }
 
+        .header-desktop-nav {
+          display: flex;
+          align-items: center;
+        }
+
         .header-controls {
           display: flex;
           align-items: center;
-          gap: 12px;
+          gap: 10px;
         }
 
         .header-btn {
@@ -118,6 +125,8 @@ export default function AppHeader({
           color: var(--text-muted);
           transition: all 0.2s ease;
           cursor: pointer;
+          flex-shrink: 0;
+          touch-action: manipulation;
         }
 
         .header-btn:hover {
@@ -130,7 +139,7 @@ export default function AppHeader({
         .user-profile-badge {
           display: flex;
           align-items: center;
-          gap: 9px;
+          gap: 8px;
           padding: 4px 10px 4px 6px;
           background: var(--surface-card);
           border: 1px solid var(--border);
@@ -141,6 +150,8 @@ export default function AppHeader({
           cursor: pointer;
           transition: all 0.2s ease;
           outline: none;
+          flex-shrink: 0;
+          touch-action: manipulation;
         }
 
         .user-profile-badge:hover, .user-profile-badge.active {
@@ -161,6 +172,7 @@ export default function AppHeader({
           color: #fff;
           font-size: 12px;
           font-weight: 700;
+          flex-shrink: 0;
         }
 
         .user-gh-pill {
@@ -193,6 +205,7 @@ export default function AppHeader({
           color: var(--success);
           font-size: 11px;
           font-weight: 600;
+          flex-shrink: 0;
         }
 
         .live-dot {
@@ -203,17 +216,84 @@ export default function AppHeader({
           animation: pulseGlow 2s infinite ease-in-out;
         }
 
-        @media (max-width: 820px) {
+        /* Mobile specific bottom navigation and sub-bar */
+        .mobile-header-subbar {
+          display: none;
+          padding: 8px 16px 12px;
+          border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.05));
+          flex-direction: column;
+          gap: 10px;
+        }
+
+        @media (max-width: 960px) {
           .header-inner {
             padding: 0 18px;
           }
-          .brand-title {
+          .user-gh-pill {
             display: none;
           }
+        }
+
+        @media (max-width: 768px) {
+          .header-inner {
+            height: 58px;
+            padding: 0 14px;
+            gap: 12px;
+          }
+
+          .header-brand-group {
+            gap: 12px;
+          }
+
+          .brand-link {
+            font-size: 17px;
+          }
+
+          .brand-logo-gem {
+            width: 32px;
+            height: 32px;
+          }
+
+          .brand-tag {
+            display: none;
+          }
+
+          .header-desktop-nav {
+            display: none;
+          }
+
+          .desktop-search-wrap {
+            display: none;
+          }
+
           .live-status-pill {
+            padding: 4px 6px;
+          }
+
+          .live-status-text {
             display: none;
           }
+
           .user-name-text {
+            display: none;
+          }
+
+          .user-profile-badge {
+            padding: 3px;
+          }
+
+          .header-btn {
+            width: 34px;
+            height: 34px;
+          }
+
+          .mobile-header-subbar {
+            display: flex;
+          }
+        }
+
+        @media (max-width: 420px) {
+          .live-status-pill {
             display: none;
           }
         }
@@ -224,7 +304,7 @@ export default function AppHeader({
           <div className="header-brand-group">
             <a href="/" className="brand-link" aria-label="IssueFit Dashboard">
               <div className="brand-logo-gem">
-                <GitMerge size={20} />
+                <GitMerge size={19} />
                 <span className="brand-pulse-dot" />
               </div>
               <div className="brand-title-wrap">
@@ -233,20 +313,24 @@ export default function AppHeader({
               </div>
             </a>
 
-            <NavigationTabs activeTab={activeTab} onTabChange={onTabChange} />
+            <div className="header-desktop-nav">
+              <NavigationTabs activeTab={activeTab} onTabChange={onTabChange} />
+            </div>
           </div>
 
           <div className="header-controls">
             {activeTab === 'discover' && (
-              <GlobalSearch
-                searchQuery={searchQuery}
-                onSearchChange={onSearchChange}
-              />
+              <div className="desktop-search-wrap">
+                <GlobalSearch
+                  searchQuery={searchQuery}
+                  onSearchChange={onSearchChange}
+                />
+              </div>
             )}
 
             <div className="live-status-pill" title="Backend API connected & verified">
               <span className="live-dot" />
-              <span>API Live</span>
+              <span className="live-status-text">API Live</span>
             </div>
 
             <button
@@ -256,7 +340,7 @@ export default function AppHeader({
               aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
               title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
             >
-              {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
             </button>
 
             {user && (
@@ -301,10 +385,22 @@ export default function AppHeader({
                 aria-label="GitHub Website"
                 title="GitHub"
               >
-                <Github size={17} />
+                <Github size={16} />
               </a>
             )}
           </div>
+        </div>
+
+        <div className="mobile-header-subbar">
+          <NavigationTabs activeTab={activeTab} onTabChange={onTabChange} />
+          {activeTab === 'discover' && (
+            <div className="mobile-search-wrap">
+              <GlobalSearch
+                searchQuery={searchQuery}
+                onSearchChange={onSearchChange}
+              />
+            </div>
+          )}
         </div>
       </header>
     </>

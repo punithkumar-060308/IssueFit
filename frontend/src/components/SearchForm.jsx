@@ -183,6 +183,8 @@ export default function SearchForm({ onSubmit, isLoading, prefill }) {
           color: var(--text-muted);
           transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
           cursor: pointer;
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: transparent;
         }
 
         .preset-pill:hover {
@@ -230,6 +232,7 @@ export default function SearchForm({ onSubmit, isLoading, prefill }) {
           color: var(--text);
           font-size: 13px;
           font-family: inherit;
+          min-width: 0;
         }
 
         .url-omni-input::placeholder {
@@ -241,12 +244,6 @@ export default function SearchForm({ onSubmit, isLoading, prefill }) {
           grid-template-columns: repeat(3, 1fr);
           gap: 16px;
           margin-bottom: 24px;
-        }
-
-        @media (max-width: 860px) {
-          .fields-bento-grid {
-            grid-template-columns: 1fr;
-          }
         }
 
         .bento-field-box {
@@ -302,6 +299,7 @@ export default function SearchForm({ onSubmit, isLoading, prefill }) {
         .bento-hint-text {
           font-size: 11px;
           color: var(--text-subtle);
+          word-break: break-word;
         }
 
         .bento-field-error {
@@ -326,6 +324,8 @@ export default function SearchForm({ onSubmit, isLoading, prefill }) {
           cursor: pointer;
           transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
           box-shadow: 0 4px 18px rgba(99, 102, 241, 0.4);
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: transparent;
         }
 
         .submit-radar-btn:hover:not(:disabled) {
@@ -347,6 +347,77 @@ export default function SearchForm({ onSubmit, isLoading, prefill }) {
           display: inline-flex;
           align-items: center;
           gap: 3px;
+        }
+
+        @media (max-width: 860px) {
+          .fields-bento-grid {
+            grid-template-columns: 1fr;
+            gap: 12px;
+            margin-bottom: 20px;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .match-console-card {
+            padding: 18px 14px;
+            border-radius: var(--radius-lg);
+          }
+
+          .console-top-row {
+            margin-bottom: 16px;
+            gap: 12px;
+          }
+
+          .console-heading {
+            font-size: 19px;
+          }
+
+          .presets-belt {
+            width: 100%;
+            overflow-x: auto;
+            flex-wrap: nowrap;
+            padding-bottom: 6px;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+          }
+
+          .presets-belt::-webkit-scrollbar {
+            display: none;
+          }
+
+          .preset-pill {
+            flex-shrink: 0;
+            padding: 5px 10px;
+            font-size: 11.5px;
+          }
+
+          .url-omni-bar {
+            padding: 9px 12px;
+            margin-bottom: 14px;
+          }
+
+          .url-omni-input {
+            font-size: 13px;
+          }
+
+          .bento-field-box {
+            padding: 12px 14px;
+            gap: 6px;
+          }
+
+          .bento-field-input {
+            font-size: 16px; /* Prevents auto-zoom on iOS Safari */
+          }
+
+          .submit-radar-btn {
+            height: 46px;
+            font-size: 13.5px;
+            padding: 0 12px;
+          }
+
+          .kbd-chip {
+            display: none;
+          }
         }
       `}</style>
 

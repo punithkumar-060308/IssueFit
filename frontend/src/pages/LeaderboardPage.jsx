@@ -209,6 +209,41 @@ export default function LeaderboardPage() {
           color: var(--text-muted);
           margin-top: 20px;
         }
+
+        @media (max-width: 640px) {
+          .leaderboard-header-section {
+            margin-bottom: 18px;
+          }
+
+          .lb-title-display {
+            font-size: clamp(22px, 5vw, 32px);
+          }
+
+          .lb-subtitle-display {
+            font-size: 13px;
+          }
+
+          .lb-master-table th {
+            padding: 12px 14px;
+            font-size: 10px;
+          }
+
+          .lb-master-table td {
+            padding: 12px 14px;
+            font-size: 12.5px;
+          }
+
+          .contributor-avatar-ring {
+            width: 28px;
+            height: 28px;
+          }
+
+          .telemetry-footer-banner {
+            padding: 12px 14px;
+            font-size: 11.5px;
+            margin-top: 14px;
+          }
+        }
       `}</style>
 
       <div className="leaderboard-header-section">
