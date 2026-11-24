@@ -2,7 +2,6 @@ import { useState } from 'react'
 import './App.css'
 import AppHeader from './components/AppHeader'
 import DiscoverPage from './pages/DiscoverPage'
-import LeaderboardPage from './pages/LeaderboardPage'
 import ProfilePage from './pages/ProfilePage'
 import RepositoryConnectPanel from './components/RepositoryConnectPanel'
 import TrendingTodayPanel from './components/TrendingTodayPanel'
@@ -40,7 +39,7 @@ function Dashboard() {
       <main className="app-container">
         <div
           className={`dashboard-grid${
-            activeTab === 'leaderboard' || activeTab === 'profile' ? ' single-column' : ''
+            activeTab === 'profile' ? ' single-column' : ''
           }`}
         >
           <div className="main-column">
@@ -50,7 +49,6 @@ function Dashboard() {
                 connectedRepo={connectedRepo}
               />
             )}
-            {activeTab === 'leaderboard' && <LeaderboardPage />}
             {activeTab === 'profile' && <ProfilePage />}
           </div>
 

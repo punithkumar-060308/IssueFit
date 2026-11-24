@@ -74,6 +74,20 @@ export default function RepositoryConnectPanel({ onRepoConnected }) {
           overflow: hidden;
         }
 
+        @media (max-width: 640px) {
+          .station-card {
+            padding: 18px 16px;
+            border-radius: var(--radius-lg);
+          }
+          .station-input {
+            font-size: 16px; /* Prevents auto-zoom on iOS */
+            height: 44px;
+          }
+          .station-action-btn {
+            height: 44px;
+          }
+        }
+
         .station-header {
           display: flex;
           align-items: center;

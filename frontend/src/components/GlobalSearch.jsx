@@ -82,16 +82,21 @@ export default function GlobalSearch({ searchQuery, onSearchChange }) {
 
         @media (max-width: 820px) {
           .global-search-container {
-            max-width: 200px;
+            max-width: 220px;
           }
           .search-shortcut-badge {
             display: none;
           }
         }
 
-        @media (max-width: 640px) {
+        @media (max-width: 768px) {
           .global-search-container {
-            display: none;
+            max-width: 100%;
+            width: 100%;
+          }
+          .global-search-input {
+            height: 38px;
+            font-size: 14px;
           }
         }
       `}</style>

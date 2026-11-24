@@ -199,6 +199,37 @@ export default function IssueCard({ issue }) {
           border-color: var(--border-bright);
           color: #ffffff;
         }
+
+        @media (max-width: 640px) {
+          .bento-issue-card {
+            padding: 16px 14px;
+            gap: 12px;
+          }
+
+          .card-issue-title {
+            font-size: 15px;
+            word-break: break-word;
+          }
+
+          .card-scores-row {
+            padding: 10px 12px;
+            gap: 10px;
+          }
+
+          .card-footer-action {
+            justify-content: stretch;
+            gap: 8px;
+          }
+
+          .card-understand-btn,
+          .card-view-btn {
+            flex: 1;
+            justify-content: center;
+            min-height: 40px;
+            padding: 8px 10px;
+            font-size: 12px;
+          }
+        }
       `}</style>
 
       <article className="bento-issue-card">

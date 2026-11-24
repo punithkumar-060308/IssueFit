@@ -516,6 +516,61 @@ export default function IssueBreakdownModal({ issue, owner, repo, onClose }) {
           transform: translateY(-1px);
           box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
         }
+
+        @media (max-width: 640px) {
+          .breakdown-modal-backdrop {
+            padding: 8px 6px;
+            align-items: flex-end;
+          }
+
+          .breakdown-modal-window {
+            max-height: 94vh;
+            border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+          }
+
+          .breakdown-modal-header {
+            padding: 14px 16px;
+            gap: 10px;
+          }
+
+          .breakdown-issue-title {
+            font-size: 15px;
+          }
+
+          .breakdown-tabs-bar {
+            padding: 0 10px;
+          }
+
+          .breakdown-tab-btn {
+            padding: 10px 8px;
+            font-size: 12px;
+            gap: 5px;
+          }
+
+          .breakdown-modal-body {
+            padding: 14px 12px;
+            gap: 14px;
+          }
+
+          .breakdown-grid-2col {
+            grid-template-columns: 1fr;
+          }
+
+          .step-item-card {
+            gap: 10px;
+            padding: 12px;
+          }
+
+          .step-number-bubble {
+            width: 26px;
+            height: 26px;
+            font-size: 11px;
+          }
+
+          .file-item-box {
+            padding: 10px 12px;
+          }
+        }
       `}</style>
 
       <div

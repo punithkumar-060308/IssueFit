@@ -351,6 +351,57 @@ export default function ProfilePage() {
           align-items: center;
           gap: 12px;
         }
+
+        @media (max-width: 640px) {
+          .profile-card {
+            padding: 18px 16px;
+            border-radius: var(--radius);
+          }
+
+          .profile-hero {
+            gap: 14px;
+          }
+
+          .profile-avatar-large {
+            width: 60px;
+            height: 60px;
+            font-size: 24px;
+          }
+
+          .profile-hero-name {
+            font-size: 19px;
+          }
+
+          .form-input {
+            font-size: 16px; /* Prevents auto-zoom on iOS */
+            height: 42px;
+          }
+
+          .form-actions {
+            flex-direction: column-reverse;
+            gap: 10px;
+            width: 100%;
+          }
+
+          .btn-secondary,
+          .btn-primary-action {
+            width: 100%;
+            justify-content: center;
+            height: 44px;
+          }
+
+          .github-connect-box {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 14px;
+          }
+
+          .github-connect-meta {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+          }
+        }
       `}</style>
 
       {/* Hero Header Card */}

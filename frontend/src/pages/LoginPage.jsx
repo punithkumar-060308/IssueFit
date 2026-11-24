@@ -148,6 +148,33 @@ export default function LoginPage() {
           line-height: 1.5;
         }
 
+        @media (max-width: 640px) {
+          .login-page-wrapper {
+            padding: 16px 12px;
+          }
+
+          .login-card {
+            padding: 28px 20px;
+            border-radius: 16px;
+          }
+
+          .login-title {
+            font-size: 22px;
+          }
+
+          .login-subtitle {
+            font-size: 13px;
+            margin: 0 0 20px;
+          }
+
+          .login-brand-icon {
+            width: 50px;
+            height: 50px;
+            margin-bottom: 16px;
+            border-radius: 14px;
+          }
+        }
+
         .login-perks {
           display: flex;
           justify-content: center;

@@ -175,6 +175,18 @@ export default function FilterPanel({
           accent-color: var(--primary);
           margin-top: 6px;
         }
+
+        @media (max-width: 640px) {
+          .filter-drawer-card {
+            grid-template-columns: 1fr;
+            padding: 14px 16px;
+            gap: 12px;
+          }
+          .filter-select-input {
+            font-size: 16px;
+            padding: 10px 12px;
+          }
+        }
       `}</style>
 
       <div className="filter-section">

@@ -81,7 +81,7 @@
 @media (max-width: 1180px) {
   .dashboard-grid {
     grid-template-columns: 1fr;
-    gap: 28px;
+    gap: 24px;
   }
 
   .sidebar-column {
@@ -90,5 +90,48 @@
 
   .app-container {
     padding: 24px 18px;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    padding: 16px 12px;
+  }
+
+  .dashboard-grid {
+    gap: 18px;
+  }
+
+  .main-column {
+    gap: 18px;
+  }
+
+  .sidebar-column {
+    gap: 16px;
+  }
+
+  .ambient-glow {
+    width: 100vw;
+    height: 300px;
+    top: -100px;
+    filter: blur(50px);
+  }
+}
+
+@media (max-width: 480px) {
+  .app-container {
+    padding: 12px 8px;
+  }
+
+  .dashboard-grid {
+    gap: 14px;
+  }
+
+  .main-column {
+    gap: 14px;
+  }
+
+  .sidebar-column {
+    gap: 14px;
   }
 }
