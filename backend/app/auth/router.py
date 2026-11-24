@@ -426,7 +426,7 @@ async def get_me(request: Request):
                 "profile_url": gh_url,
             },
         },
-        "requires_github_connection": False,
+        "requires_github_connection": not (is_connected or bool(gh_user)),
     }
 
 

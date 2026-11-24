@@ -46,4 +46,8 @@ LLM_PROVIDER: str = os.getenv(
     "gemini" if GEMINI_API_KEY else ("openai" if OPENAI_API_KEY else "none"),
 )
 AI_REQUEST_TIMEOUT_SECONDS: int = int(os.getenv("AI_REQUEST_TIMEOUT_SECONDS", "45"))
+AI_MAX_RETRIES: int = int(os.getenv("AI_MAX_RETRIES", "3"))
+AI_RETRY_BASE_DELAY: float = float(os.getenv("AI_RETRY_BASE_DELAY", "1.0"))
+AI_RETRY_MAX_DELAY: float = float(os.getenv("AI_RETRY_MAX_DELAY", "10.0"))
 BREAKDOWN_CACHE_TTL_SECONDS: int = int(os.getenv("BREAKDOWN_CACHE_TTL_SECONDS", "3600"))
+ANALYSIS_VERSION: str = "2.0"

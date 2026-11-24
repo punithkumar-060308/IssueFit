@@ -81,6 +81,78 @@ export async function getIssueBreakdown(owner, repo, issueNumber) {
   return data
 }
 
+export async function startIssueBreakdown(owner, repo, issueNumber, options = {}) {
+  const response = await fetch(`${API_BASE_URL}/api/issues/breakdown/start`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      owner,
+      repo,
+      issue_number: Number(issueNumber),
+      provider_override: options.providerOverride || null,
+      force_refresh: Boolean(options.forceRefresh),
+    }),
+  })
+
+  let data
+  try {
+    data = await response.json()
+  } catch {
+    throw new Error('Server returned an invalid response.')
+  }
+
+  if (!response.ok || data.success === false) {
+    const errorMsg = data?.error?.message || 'Could not start issue analysis.'
+    const err = new Error(errorMsg)
+    err.code = data?.error?.code
+    err.status = response.status
+    throw err
+  }
+
+  return data
+}
+
+export async function getIssueBreakdownStatus(jobId) {
+  const response = await fetch(`${API_BASE_URL}/api/issues/breakdown/status/${encodeURIComponent(jobId)}`, {
+    method: 'GET',
+    credentials: 'include',
+  })
+
+  let data
+  try {
+    data = await response.json()
+  } catch {
+    throw new Error('Server returned an invalid status response.')
+  }
+
+  if (!response.ok || data.success === false) {
+    const errorMsg = data?.error?.message || 'Could not check analysis status.'
+    const err = new Error(errorMsg)
+    err.code = data?.error?.code
+    err.status = response.status
+    throw err
+  }
+
+  return data
+}
+
+export async function cancelIssueBreakdown(jobId) {
+  const response = await fetch(`${API_BASE_URL}/api/issues/breakdown/cancel/${encodeURIComponent(jobId)}`, {
+    method: 'POST',
+    credentials: 'include',
+  })
+
+  let data
+  try {
+    data = await response.json()
+  } catch {
+    return { success: false }
+  }
+
+  return data
+}
+
 export async function getLeaderboard() {
   try {
     const response = await fetch(`${API_BASE_URL}/api/leaderboard`)

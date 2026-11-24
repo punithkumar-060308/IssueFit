@@ -101,12 +101,14 @@ class IssueBreakdownRequest(BaseModel):
     owner: str = Field(min_length=1, max_length=100)
     repo: str = Field(min_length=1, max_length=100)
     issue_number: int = Field(gt=0)
+    allow_fallback: bool = False
 
     def clean(self) -> "IssueBreakdownRequest":
         return IssueBreakdownRequest(
             owner=self.owner.strip(),
             repo=self.repo.strip(),
             issue_number=self.issue_number,
+            allow_fallback=self.allow_fallback,
         )
 
 
@@ -191,10 +193,17 @@ class DifficultyAssessment(BaseModel):
 
 
 class BreakdownMeta(BaseModel):
-    breakdown_version: str = "1.0"
+    breakdown_version: str = "2.0"
     generated_at: str
     model: str
     grounded_evidence: dict[str, Any] = {}
+
+
+class LearningResource(BaseModel):
+    title: str
+    url: str | None = None
+    resource_type: str = "documentation"
+    description: str = ""
 
 
 class IssueBreakdownData(BaseModel):
@@ -205,7 +214,55 @@ class IssueBreakdownData(BaseModel):
     edge_cases_and_testing: EdgeCasesAndTesting
     prerequisite_knowledge: PrerequisiteKnowledge
     difficulty_assessment: DifficultyAssessment
+    potential_challenges: list[str] = Field(default_factory=list)
+    learning_resources: list[LearningResource] = Field(default_factory=list)
+    is_fallback: bool = False
+    fallback_reason: str | None = None
     meta: BreakdownMeta | None = None
+
+    @property
+    def simple_explanation(self) -> str:
+        return self.problem_explanation.summary
+
+    @property
+    def actual_problem(self) -> str:
+        return self.problem_explanation.what_is_wrong
+
+    @property
+    def required_skills(self) -> list[str]:
+        return list(dict.fromkeys(self.technical_context.languages + self.technical_context.frameworks_and_libraries))
+
+    @property
+    def prerequisites(self) -> list[str]:
+        return [item.concept for item in self.prerequisite_knowledge.essential]
+
+    @property
+    def implementation_steps(self) -> list[ImplementationStep]:
+        return self.implementation_approach.steps
+
+    @property
+    def difficulty_level(self) -> str:
+        return self.difficulty_assessment.level
+
+    @property
+    def difficulty_reasoning(self) -> str:
+        return self.difficulty_assessment.reasoning
+
+
+class BreakdownJobStatus(BaseModel):
+    job_id: str
+    owner: str
+    repo: str
+    issue_number: int
+    status: Literal["pending", "running", "completed", "failed", "cancelled"]
+    stage: str = "initializing"
+    stage_description: str = "Analysis job queued"
+    created_at: str
+    updated_at: str
+    breakdown: IssueBreakdownData | None = None
+    error: ErrorDetail | None = None
+    cached: bool = False
+    is_fallback: bool = False
 
 
 class IssueBreakdownResponse(BaseModel):
@@ -214,5 +271,7 @@ class IssueBreakdownResponse(BaseModel):
     repo: str
     issue_number: int
     cached: bool = False
+    is_fallback: bool = False
     breakdown: IssueBreakdownData | None = None
     error: ErrorDetail | None = None
+    job_id: str | None = None

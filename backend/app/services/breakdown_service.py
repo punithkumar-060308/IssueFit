@@ -2,16 +2,20 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timezone
 import logging
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import ValidationError
 
-from app.config import BREAKDOWN_CACHE_TTL_SECONDS
+from app.config import BREAKDOWN_CACHE_TTL_SECONDS, ANALYSIS_VERSION
 from app.schemas import (
     IssueBreakdownData,
     BreakdownMeta,
     FileReference,
     RequirementItem,
+    LearningResource,
+    ImplementationStep,
+    TestScenario,
+    PrerequisiteItem,
 )
 from app.services.github_client import (
     fetch_single_issue,
@@ -28,6 +32,8 @@ from app.services.ai_service import (
     AIConfigurationError,
     AIRateLimitError,
     AITimeoutError,
+    AIServiceUnavailableError,
+    AIServerError,
     AIServiceError,
     AIResponseValidationError,
 )
@@ -45,6 +51,11 @@ async def _get_issue_lock(lock_key: str) -> asyncio.Lock:
         if lock_key not in _in_flight_locks:
             _in_flight_locks[lock_key] = asyncio.Lock()
         return _in_flight_locks[lock_key]
+
+
+def get_breakdown_cache_key(owner: str, repo: str, issue_number: int, updated_at: str) -> str:
+    clean_updated = str(updated_at).replace(":", "-").replace(" ", "_")
+    return f"breakdown:v{ANALYSIS_VERSION}:{owner.lower()}:{repo.lower()}:{issue_number}:{clean_updated}"
 
 
 def _build_system_prompt() -> str:
@@ -133,7 +144,19 @@ You must respond ONLY with a valid, parseable JSON object matching this schema:
     "level": "Beginner, Intermediate, or Advanced",
     "reasoning": "Detailed explanation of why this difficulty was assigned based on complexity, scope, and testing",
     "complexity_factors": ["Key factors influencing difficulty"]
-  }
+  },
+  "potential_challenges": [
+    "Specific potential challenge or pitfall 1",
+    "Specific potential challenge or pitfall 2"
+  ],
+  "learning_resources": [
+    {
+      "title": "Resource title (e.g. Official Documentation or Tutorial)",
+      "url": "https://... or documentation name",
+      "resource_type": "documentation",
+      "description": "Why this resource is relevant to this issue"
+    }
+  ]
 }
 """
 
@@ -159,7 +182,6 @@ def _build_user_prompt(
     body = issue.get("body") or ""
     parts.append("\n--- ISSUE DESCRIPTION ---")
     if body.strip():
-        # Limit body to ~4000 characters to keep prompt size reasonable
         parts.append(body[:4000])
     else:
         parts.append("(The author did not provide a description for this issue. Rely on title, labels, and repository context.)")
@@ -204,8 +226,6 @@ def _verify_and_post_process(
             reason = f.get("relevance_reason") or "Identified during issue analysis"
             guidance = f.get("investigation_guidance") or "Investigate implementation details"
 
-            # Cross-reference with verified files
-            # Check exact match or basename/normalized match
             norm_path = path.replace("\\", "/").strip("/")
             is_verified = (
                 norm_path in verified_files
@@ -237,9 +257,19 @@ def _verify_and_post_process(
                 item["evidence_level"] = "inferred"
     raw_data["expected_outcome"] = exp_out
 
-    # 3. Add metadata
+    # 3. Process potential_challenges and learning_resources
+    if "potential_challenges" not in raw_data or not isinstance(raw_data["potential_challenges"], list):
+        raw_data["potential_challenges"] = [
+            "Ensuring complete edge-case handling without side effects",
+            "Writing thorough tests matching repository standards",
+        ]
+
+    if "learning_resources" not in raw_data or not isinstance(raw_data["learning_resources"], list):
+        raw_data["learning_resources"] = []
+
+    # 4. Add metadata
     raw_data["meta"] = BreakdownMeta(
-        breakdown_version="1.0",
+        breakdown_version=ANALYSIS_VERSION,
         generated_at=datetime.now(timezone.utc).isoformat(),
         model=model_name,
         grounded_evidence={
@@ -249,8 +279,220 @@ def _verify_and_post_process(
         },
     ).model_dump()
 
-    # 4. Strict Pydantic parsing
     return IssueBreakdownData.model_validate(raw_data)
+
+
+def generate_fallback_breakdown(
+    issue: dict[str, Any],
+    repo_data: dict[str, Any],
+    readme_excerpt: str | None = None,
+    comments: list[dict[str, Any]] | None = None,
+    verified_files: list[str] | None = None,
+    reason: str = "AI service temporarily unavailable (operating in grounded heuristic mode)",
+) -> IssueBreakdownData:
+    """
+    Synthesize an intelligent, deterministic, and grounded fallback issue breakdown
+    when the upstream AI provider is unavailable, rate-limited, or unconfigured.
+    Guarantees that the contributor always receives actionable guidance.
+    """
+    title = issue.get("title", "Open Source Issue").strip()
+    body = (issue.get("body") or "").strip()
+    issue_number = issue.get("number", 1)
+    repo_name = repo_data.get("full_name") or f"{repo_data.get('owner', 'repo')}/{repo_data.get('name', 'repo')}"
+    lang = repo_data.get("language") or "General"
+    files = verified_files or []
+
+    # Detect difficulty from labels
+    label_names = [
+        lbl.get("name", "").lower() if isinstance(lbl, dict) else str(lbl).lower()
+        for lbl in issue.get("labels", [])
+    ]
+    is_beginner = any("good first issue" in l or "beginner" in l or "easy" in l for l in label_names)
+    is_advanced = any("complex" in l or "architecture" in l or "hard" in l for l in label_names)
+    diff_level = "Beginner" if is_beginner else ("Advanced" if is_advanced else "Intermediate")
+
+    # Pick candidate files from verified repo tree
+    candidate_files = []
+    for f in files[:10]:
+        if not f.endswith((".png", ".jpg", ".svg", ".ico", ".lock")):
+            candidate_files.append(
+                FileReference(
+                    file_path=f,
+                    relevance_reason="Repository source candidate for inspection",
+                    investigation_guidance="Review existing test cases and module implementations",
+                    evidence_level="verified",
+                )
+            )
+    if not candidate_files:
+        candidate_files.append(
+            FileReference(
+                file_path="README.md",
+                relevance_reason="Contains developer setup, contributing guidelines, and architecture overview",
+                investigation_guidance="Read setup steps and run local tests",
+                evidence_level="verified",
+            )
+        )
+
+    summary_text = (
+        f"This issue addresses '{title}'. The goal is to inspect the repository, trace the root cause, and implement a validated fix."
+    )
+    what_wrong_text = (
+        f"Issue #{issue_number} reports: {title}. {body[:250] + '...' if len(body) > 250 else body or 'No additional details provided in the issue description.'}"
+    )
+
+    data = {
+        "problem_explanation": {
+            "summary": summary_text,
+            "what_is_wrong": what_wrong_text,
+            "expected_behavior": f"The functionality described in '{title}' should operate smoothly without regressions or unhandled errors.",
+            "why_it_matters": "Resolving this issue improves codebase reliability and enhances user/developer experience.",
+            "impact": "Benefits contributors and consumers relying on this component of the repository.",
+        },
+        "expected_outcome": {
+            "expected_behavior": f"Successful resolution of issue #{issue_number} with clean automated test coverage.",
+            "explicit_requirements": [
+                {"text": f"Address the problem described in: {title}", "evidence_level": "verified"},
+            ],
+            "inferred_requirements": [
+                {"text": "Ensure no breaking changes to public APIs", "evidence_level": "inferred"},
+                {"text": "Add regression test coverage covering the fixed scenario", "evidence_level": "inferred"},
+            ],
+            "acceptance_criteria": [
+                {"text": "All existing and newly added automated tests pass cleanly", "evidence_level": "verified"},
+                {"text": "Pull request follows the repository's contributing guidelines", "evidence_level": "inferred"},
+            ],
+        },
+        "technical_context": {
+            "languages": [lang] if lang != "General" else ["Polyglot"],
+            "frameworks_and_libraries": [lang],
+            "architectural_concepts": ["Modular Design", "Test-Driven Development", "Input Validation"],
+            "components_involved": [repo_name.split("/")[-1]],
+            "dependencies_to_investigate": [lang.lower()],
+            "relevant_files": [f.model_dump() for f in candidate_files[:4]],
+        },
+        "implementation_approach": {
+            "overview": "Reproduce the issue locally, locate the affected code paths, implement the targeted fix, and verify with tests.",
+            "steps": [
+                {
+                    "step_number": 1,
+                    "title": "Set up environment & reproduce issue",
+                    "description": "Clone the repository, install dependencies, and recreate the reported behavior locally.",
+                    "details": [
+                        "Check README.md or CONTRIBUTING.md for local setup commands",
+                        "Run the existing test suite to ensure a clean baseline",
+                    ],
+                },
+                {
+                    "step_number": 2,
+                    "title": "Trace and implement the solution",
+                    "description": "Locate the relevant source files and apply minimal, clean changes resolving the root cause.",
+                    "details": [
+                        "Inspect input validation and error handling paths",
+                        "Keep changes focused strictly on the reported scope",
+                    ],
+                },
+                {
+                    "step_number": 3,
+                    "title": "Add test cases & verify",
+                    "description": "Write automated tests validating the fix and preventing future regressions.",
+                    "details": [
+                        "Include edge cases and boundary conditions in test assertions",
+                        "Run the linter and test suite before submitting PR",
+                    ],
+                },
+            ],
+            "things_to_avoid": [
+                "Avoid bundling unrelated refactorings or code style changes into this fix",
+                "Do not skip automated test verification",
+            ],
+        },
+        "edge_cases_and_testing": {
+            "edge_cases": [
+                "Null, empty, or unexpected input parameters",
+                "Boundary limits and error responses",
+            ],
+            "failure_scenarios": [
+                "Unhandled exceptions causing unexpected application crashes",
+            ],
+            "input_validation": [
+                "Validate inputs against defined schemas or types before processing",
+            ],
+            "compatibility_considerations": [
+                "Maintain backwards compatibility for existing consumers",
+            ],
+            "regression_risks": [
+                "Ensure dependent components and existing tests are not broken",
+            ],
+            "suggested_tests": [
+                {
+                    "name": "test_issue_resolution",
+                    "description": f"Verify fix for issue #{issue_number} with expected inputs and edge cases",
+                    "test_type": "unit",
+                }
+            ],
+        },
+        "prerequisite_knowledge": {
+            "essential": [
+                {
+                    "concept": f"{lang} Programming",
+                    "why_it_matters": f"Core codebase is written in {lang}",
+                },
+                {
+                    "concept": "Git & GitHub Pull Request Workflow",
+                    "why_it_matters": "Required to branch, commit, and submit changes for review",
+                },
+            ],
+            "helpful": [
+                {
+                    "concept": "Automated Testing Frameworks",
+                    "why_it_matters": "Makes writing unit and integration tests much faster",
+                }
+            ],
+        },
+        "difficulty_assessment": {
+            "level": diff_level,
+            "reasoning": (
+                f"Assessed as {diff_level} based on issue tags ({', '.join(label_names) or 'standard'}), "
+                f"repository scope in {lang}, and required test verification."
+            ),
+            "complexity_factors": [
+                f"{lang} familiarity",
+                "Local test environment setup",
+            ],
+        },
+        "potential_challenges": [
+            "Isolating the root cause within existing repository modules",
+            "Setting up the local development and test environment cleanly",
+        ],
+        "learning_resources": [
+            {
+                "title": f"Official {lang} Documentation",
+                "url": f"https://www.google.com/search?q={lang}+official+documentation",
+                "resource_type": "documentation",
+                "description": f"Authoritative reference and language guide for {lang}",
+            },
+            {
+                "title": f"Repository on GitHub: {repo_name}",
+                "url": f"https://github.com/{repo_name}",
+                "resource_type": "repository",
+                "description": "Source code, issues, and discussion threads",
+            },
+        ],
+        "is_fallback": True,
+        "fallback_reason": reason,
+        "meta": {
+            "breakdown_version": ANALYSIS_VERSION,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "model": "heuristic-fallback",
+            "grounded_evidence": {
+                "verified_files_count": len(files),
+                "relevant_files_verified": len(candidate_files),
+                "relevant_files_hypotheses": 0,
+            },
+        },
+    }
+
+    return IssueBreakdownData.model_validate(data)
 
 
 async def get_or_generate_issue_breakdown(
@@ -258,59 +500,93 @@ async def get_or_generate_issue_breakdown(
     repo: str,
     issue_number: int,
     provider_override: str | None = None,
+    force_refresh: bool = False,
+    pre_fetched_context: Optional[dict[str, Any]] = None,
+    allow_fallback: bool = False,
 ) -> tuple[IssueBreakdownData, bool]:
     """
-    Retrieve or generate an issue breakdown.
+    Retrieve or generate an issue breakdown with:
+    - Versioned, issue-specific and timestamp-based caching
+    - Deduplication of simultaneous requests
+    - Graceful fallback when AI is unavailable
     Returns (breakdown_data, is_cached).
     """
-    # Step 1: Fetch issue metadata from GitHub to ensure it exists and get updated_at
-    issue = await fetch_single_issue(owner, repo, issue_number)
+    owner_clean = owner.strip().lower()
+    repo_clean = repo.strip().lower()
 
-    # Use updated_at to ensure cache invalidates whenever issue is updated
+    # Step 1: Obtain issue metadata (from pre-fetched context or GitHub)
+    if pre_fetched_context and "issue" in pre_fetched_context:
+        issue = pre_fetched_context["issue"]
+    else:
+        issue = await fetch_single_issue(owner, repo, issue_number)
+
     updated_at = issue.get("updated_at") or "initial"
-    cache_key = f"breakdown:{owner.lower()}:{repo.lower()}:{issue_number}:{updated_at}"
+    cache_key = get_breakdown_cache_key(owner_clean, repo_clean, issue_number, updated_at)
 
     # Step 2: Check cache
-    cached_data = cache_get(cache_key)
-    if cached_data is not None:
-        try:
-            return IssueBreakdownData.model_validate(cached_data), True
-        except Exception as e:
-            logger.warning(f"Cached breakdown invalid ({e}), regenerating...")
-
-    # Step 3: Concurrency deduplication (one generation per issue at a time)
-    lock_key = f"{owner.lower()}/{repo.lower()}#{issue_number}"
-    lock = await _get_issue_lock(lock_key)
-
-    async with lock:
-        # Check cache again inside lock in case another task finished while waiting
+    if not force_refresh:
         cached_data = cache_get(cache_key)
         if cached_data is not None:
             try:
                 return IssueBreakdownData.model_validate(cached_data), True
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Cached breakdown invalid ({e}), regenerating...")
+
+    # Step 3: Concurrency deduplication (one generation per issue at a time)
+    lock_key = f"{owner_clean}/{repo_clean}#{issue_number}"
+    lock = await _get_issue_lock(lock_key)
+
+    async with lock:
+        # Check cache again inside lock in case another task finished while waiting
+        if not force_refresh:
+            cached_data = cache_get(cache_key)
+            if cached_data is not None:
+                try:
+                    return IssueBreakdownData.model_validate(cached_data), True
+                except Exception:
+                    pass
 
         # Step 4: Gather repository context efficiently
-        repo_data = await fetch_repository(owner, repo)
-        default_branch = repo_data.get("default_branch", "main")
+        if pre_fetched_context and "repo_data" in pre_fetched_context:
+            repo_data = pre_fetched_context["repo_data"]
+            readme_str = pre_fetched_context.get("readme")
+            comments_list = pre_fetched_context.get("comments") or []
+            file_list = pre_fetched_context.get("verified_files") or []
+        else:
+            repo_data = await fetch_repository(owner, repo)
+            default_branch = repo_data.get("default_branch", "main")
 
-        # Fetch README, comments, and repo file tree in parallel (all best-effort)
-        readme_task = fetch_repository_readme(owner, repo)
-        comments_task = fetch_issue_comments(owner, repo, issue_number, limit=8)
-        tree_task = fetch_repository_tree(owner, repo, branch=default_branch, max_files=150)
+            readme_task = fetch_repository_readme(owner, repo)
+            comments_task = fetch_issue_comments(owner, repo, issue_number, limit=8)
+            tree_task = fetch_repository_tree(owner, repo, branch=default_branch, max_files=150)
 
-        readme_text, comments, verified_files_list = await asyncio.gather(
-            readme_task, comments_task, tree_task, return_exceptions=True
-        )
+            readme_text, comments, verified_files_list = await asyncio.gather(
+                readme_task, comments_task, tree_task, return_exceptions=True
+            )
 
-        readme_str = readme_text if isinstance(readme_text, str) else None
-        comments_list = comments if isinstance(comments, list) else []
-        file_list = verified_files_list if isinstance(verified_files_list, list) else []
+            readme_str = readme_text if isinstance(readme_text, str) else None
+            comments_list = comments if isinstance(comments, list) else []
+            file_list = verified_files_list if isinstance(verified_files_list, list) else []
+
         verified_files_set = {f.replace("\\", "/").strip("/") for f in file_list}
 
         # Step 5: Initialize AI Provider
-        provider = get_ai_provider(provider_override)
+        try:
+            provider = get_ai_provider(provider_override)
+        except AIConfigurationError as config_err:
+            if allow_fallback:
+                logger.info(f"AI provider not configured ({config_err.message}). Using grounded heuristic fallback.")
+                fallback = generate_fallback_breakdown(
+                    issue=issue,
+                    repo_data=repo_data,
+                    readme_excerpt=readme_str,
+                    comments=comments_list,
+                    verified_files=file_list,
+                    reason="AI service is not configured with an API key. Operating in grounded fallback mode.",
+                )
+                cache_set(cache_key, fallback.model_dump(), ttl_seconds=BREAKDOWN_CACHE_TTL_SECONDS)
+                return fallback, False
+            raise
 
         # Step 6: Construct prompts
         system_prompt = _build_system_prompt()
@@ -322,11 +598,26 @@ async def get_or_generate_issue_breakdown(
             verified_files=file_list,
         )
 
-        # Step 7: Call AI provider
-        raw_json = await provider.generate_json(
-            prompt=user_prompt,
-            system_prompt=system_prompt,
-        )
+        # Step 7: Call AI provider with retries
+        try:
+            raw_json = await provider.generate_json(
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+            )
+        except (AIRateLimitError, AITimeoutError, AIServiceUnavailableError, AIServerError, AIServiceError) as ai_err:
+            if allow_fallback:
+                logger.warning(f"AI provider call failed ({ai_err.code}: {ai_err.message}). Falling back to heuristic breakdown.")
+                fallback = generate_fallback_breakdown(
+                    issue=issue,
+                    repo_data=repo_data,
+                    readme_excerpt=readme_str,
+                    comments=comments_list,
+                    verified_files=file_list,
+                    reason=ai_err.message,
+                )
+                cache_set(cache_key, fallback.model_dump(), ttl_seconds=min(BREAKDOWN_CACHE_TTL_SECONDS, 600))
+                return fallback, False
+            raise
 
         # Step 8: Post-process & validate against schema with grounding checks
         try:
@@ -337,10 +628,20 @@ async def get_or_generate_issue_breakdown(
             )
         except ValidationError as val_err:
             logger.error(f"Pydantic validation failed for AI breakdown: {val_err}")
+            if allow_fallback:
+                logger.warning("Falling back to heuristic breakdown after validation failure.")
+                fallback = generate_fallback_breakdown(
+                    issue=issue,
+                    repo_data=repo_data,
+                    readme_excerpt=readme_str,
+                    comments=comments_list,
+                    verified_files=file_list,
+                    reason="Model returned malformed structure. Generated grounded fallback.",
+                )
+                cache_set(cache_key, fallback.model_dump(), ttl_seconds=min(BREAKDOWN_CACHE_TTL_SECONDS, 600))
+                return fallback, False
             raise AIResponseValidationError(f"Generated breakdown failed schema validation: {val_err}")
 
         # Step 9: Save to cache
         cache_set(cache_key, breakdown.model_dump(), ttl_seconds=BREAKDOWN_CACHE_TTL_SECONDS)
-
         return breakdown, False
-

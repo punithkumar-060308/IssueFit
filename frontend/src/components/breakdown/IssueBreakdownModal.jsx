@@ -3,6 +3,7 @@ import {
   X,
   Sparkles,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   HelpCircle,
   FileCode2,
@@ -17,9 +18,15 @@ import {
   Lightbulb,
   Check,
   Zap,
+  StopCircle,
 } from 'lucide-react'
 import DifficultyBadge from '../DifficultyBadge'
-import { getIssueBreakdown } from '../../services/issuefitApi'
+import {
+  startIssueBreakdown,
+  getIssueBreakdownStatus,
+  cancelIssueBreakdown,
+  getIssueBreakdown,
+} from '../../services/issuefitApi'
 
 // In-memory module cache for breakdowns across modal opens
 const breakdownCache = new Map()
@@ -27,40 +34,104 @@ const breakdownCache = new Map()
 export default function IssueBreakdownModal({ issue, owner, repo, onClose }) {
   const [activeTab, setActiveTab] = useState('overview')
   const [loading, setLoading] = useState(true)
-  const [loadingStep, setLoadingStep] = useState(0)
   const [error, setError] = useState(null)
   const [breakdownData, setBreakdownData] = useState(null)
   const [isCached, setIsCached] = useState(false)
+  const [jobStage, setJobStage] = useState('fetching_issue_context')
+  const [stageDescription, setStageDescription] = useState('Fetching issue details and discussions from GitHub...')
+  const [activeJobId, setActiveJobId] = useState(null)
+  const [isCancelled, setIsCancelled] = useState(false)
+
+  const pollTimerRef = useRef(null)
+  const isMountedRef = useRef(true)
 
   const issueNumber = issue?.number
   const cacheKey = `${owner}/${repo}#${issueNumber}`
-
-  // Loading step message rotation
-  const loadingSteps = [
-    'Gathering GitHub issue context & maintainer comments...',
-    'Inspecting repository architecture & candidate files...',
-    'Analyzing edge cases, regressions, and testing scenarios...',
-    'Synthesizing maintainer-level technical guidance...',
-  ]
-
-  useEffect(() => {
-    let interval
-    if (loading) {
-      interval = setInterval(() => {
-        setLoadingStep((prev) => (prev + 1) % loadingSteps.length)
-      }, 2500)
-    }
-    return () => clearInterval(interval)
-  }, [loading])
+  const sessionCacheKey = `issuefit_breakdown_${cacheKey}`
 
   // Close on Escape key
   useEffect(() => {
+    isMountedRef.current = true
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    return () => {
+      isMountedRef.current = false
+      window.removeEventListener('keydown', handleKeyDown)
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current)
+      }
+    }
   }, [onClose])
+
+  const stopPolling = () => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current)
+      pollTimerRef.current = null
+    }
+  }
+
+  const handleCancel = async () => {
+    stopPolling()
+    if (activeJobId) {
+      try {
+        await cancelIssueBreakdown(activeJobId)
+      } catch {
+        // Safe ignore
+      }
+    }
+    if (isMountedRef.current) {
+      setLoading(false)
+      setIsCancelled(true)
+      setActiveJobId(null)
+    }
+  }
+
+  const pollJobStatus = (jobId) => {
+    stopPolling()
+
+    pollTimerRef.current = setInterval(async () => {
+      if (!isMountedRef.current) {
+        stopPolling()
+        return
+      }
+
+      try {
+        const res = await getIssueBreakdownStatus(jobId)
+        if (!isMountedRef.current) return
+
+        if (res?.stage) setJobStage(res.stage)
+        if (res?.stage_description) setStageDescription(res.stage_description)
+
+        if (res?.status === 'completed' && res?.breakdown) {
+          stopPolling()
+          breakdownCache.set(cacheKey, res.breakdown)
+          try {
+            sessionStorage.setItem(sessionCacheKey, JSON.stringify(res.breakdown))
+          } catch {
+            // Safe ignore if storage quota exceeded
+          }
+          setBreakdownData(res.breakdown)
+          setIsCached(Boolean(res.cached))
+          setLoading(false)
+          setActiveJobId(null)
+        } else if (res?.status === 'failed') {
+          stopPolling()
+          setError(res?.error?.message || 'AI service encountered an issue. Please try again.')
+          setLoading(false)
+          setActiveJobId(null)
+        } else if (res?.status === 'cancelled') {
+          stopPolling()
+          setIsCancelled(true)
+          setLoading(false)
+          setActiveJobId(null)
+        }
+      } catch (err) {
+        // Transient network error during poll, continue polling until timeout
+      }
+    }, 850)
+  }
 
   const fetchBreakdown = async (forceRefresh = false) => {
     if (!owner || !repo || !issueNumber) {
@@ -69,35 +140,110 @@ export default function IssueBreakdownModal({ issue, owner, repo, onClose }) {
       return
     }
 
-    if (!forceRefresh && breakdownCache.has(cacheKey)) {
-      const cached = breakdownCache.get(cacheKey)
-      setBreakdownData(cached)
-      setIsCached(true)
-      setLoading(false)
-      return
+    stopPolling()
+    setIsCancelled(false)
+
+    // 1. In-memory and session storage cache check (avoids calling API on page refresh)
+    if (!forceRefresh) {
+      if (breakdownCache.has(cacheKey)) {
+        const cached = breakdownCache.get(cacheKey)
+        setBreakdownData(cached)
+        setIsCached(true)
+        setLoading(false)
+        return
+      }
+
+      try {
+        const stored = sessionStorage.getItem(sessionCacheKey)
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (parsed && typeof parsed === 'object') {
+            breakdownCache.set(cacheKey, parsed)
+            setBreakdownData(parsed)
+            setIsCached(true)
+            setLoading(false)
+            return
+          }
+        }
+      } catch {
+        // Safe ignore
+      }
     }
 
     setLoading(true)
     setError(null)
+    setJobStage('fetching_issue_context')
+    setStageDescription('Fetching issue details and discussions from GitHub...')
 
     try {
-      const res = await getIssueBreakdown(owner, repo, issueNumber)
-      if (res?.success && res?.breakdown) {
-        breakdownCache.set(cacheKey, res.breakdown)
-        setBreakdownData(res.breakdown)
-        setIsCached(Boolean(res.cached))
+      // Trigger asynchronous background job
+      const startRes = await startIssueBreakdown(owner, repo, issueNumber, { forceRefresh })
+
+      if (!isMountedRef.current) return
+
+      if (startRes?.status === 'completed' && startRes?.breakdown) {
+        // Immediate completion (backend cache hit)
+        breakdownCache.set(cacheKey, startRes.breakdown)
+        try {
+          sessionStorage.setItem(sessionCacheKey, JSON.stringify(startRes.breakdown))
+        } catch {
+          // Safe ignore
+        }
+        setBreakdownData(startRes.breakdown)
+        setIsCached(Boolean(startRes.cached))
+        setLoading(false)
+        return
+      }
+
+      if (startRes?.job_id) {
+        setActiveJobId(startRes.job_id)
+        if (startRes.stage) setJobStage(startRes.stage)
+        if (startRes.stage_description) setStageDescription(startRes.stage_description)
+        pollJobStatus(startRes.job_id)
       } else {
-        throw new Error(res?.error?.message || 'Failed to retrieve breakdown.')
+        throw new Error('Could not initialize analysis job.')
       }
     } catch (err) {
-      setError(err.message || 'An error occurred while generating the issue breakdown.')
-    } finally {
+      if (!isMountedRef.current) return
+      // Graceful fallback to legacy synchronous breakdown if start endpoint fails
+      try {
+        const syncRes = await getIssueBreakdown(owner, repo, issueNumber)
+        if (syncRes?.success && syncRes?.breakdown) {
+          breakdownCache.set(cacheKey, syncRes.breakdown)
+          try {
+            sessionStorage.setItem(sessionCacheKey, JSON.stringify(syncRes.breakdown))
+          } catch {
+            // Safe ignore
+          }
+          setBreakdownData(syncRes.breakdown)
+          setIsCached(Boolean(syncRes.cached))
+          setLoading(false)
+          return
+        }
+      } catch {
+        // Ignore fallback error and present clean user error
+      }
+
+      let friendlyMsg = 'An error occurred while generating the issue breakdown.'
+      if (err.status === 429) {
+        friendlyMsg = 'AI rate limit reached. Please wait a moment and click Retry.'
+      } else if (err.status === 503) {
+        friendlyMsg = 'AI service is temporarily unavailable. Please retry shortly.'
+      } else if (err.status === 504) {
+        friendlyMsg = 'Analysis timed out. The repository tree or issue discussion is very large.'
+      } else if (err.message) {
+        friendlyMsg = err.message
+      }
+      setError(friendlyMsg)
       setLoading(false)
     }
   }
 
   useEffect(() => {
     fetchBreakdown()
+    return () => {
+      stopPolling()
+    }
   }, [owner, repo, issueNumber])
 
   if (!issue) return null
@@ -450,41 +596,194 @@ export default function IssueBreakdownModal({ issue, owner, repo, onClose }) {
           font-weight: 700;
         }
 
-        /* Loading Animation */
-        .breakdown-loading-state {
+        /* Stage Tracker & Skeletons */
+        .stage-tracker-bar {
           display: flex;
           flex-direction: column;
+          gap: 12px;
+          padding: 16px 18px;
+          background: rgba(15, 23, 42, 0.7);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-md);
+        }
+
+        .stage-steps-row {
+          display: flex;
           align-items: center;
-          justify-content: center;
-          padding: 60px 20px;
-          gap: 18px;
-          text-align: center;
+          gap: 8px;
+          flex-wrap: wrap;
         }
 
-        .breakdown-spinner {
-          width: 44px;
-          height: 44px;
-          border: 3px solid rgba(99, 102, 241, 0.15);
-          border-top-color: var(--primary);
-          border-radius: 50%;
-          animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-
-        .loading-title {
-          font-size: 16px;
-          font-weight: 700;
-          color: var(--text);
-        }
-
-        .loading-step-text {
-          font-size: 13px;
+        .stage-step-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 12px;
+          border-radius: 9999px;
+          font-size: 11.5px;
+          font-weight: 600;
+          background: rgba(255, 255, 255, 0.04);
           color: var(--text-muted);
-          min-height: 20px;
+          border: 1px solid var(--border);
+          transition: all 0.2s ease;
+        }
+
+        .stage-step-pill.active {
+          background: rgba(99, 102, 241, 0.15);
+          color: #a5b4fc;
+          border-color: rgba(99, 102, 241, 0.4);
+          box-shadow: 0 0 12px rgba(99, 102, 241, 0.2);
+        }
+
+        .stage-step-pill.done {
+          background: rgba(16, 185, 129, 0.1);
+          color: #6ee7b7;
+          border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .stage-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: currentColor;
+          opacity: 0.6;
+        }
+
+        .stage-live-desc {
+          display: flex;
+          align-items: center;
+          gap: 8px;
           font-family: 'JetBrains Mono', monospace;
+          font-size: 12.5px;
+          color: var(--text-muted);
+        }
+
+        .breakdown-pulse-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: var(--primary);
+          box-shadow: 0 0 8px var(--primary);
+          animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+
+        @keyframes pulse-ring {
+          0% { transform: scale(0.9); opacity: 1; }
+          50% { transform: scale(1.3); opacity: 0.5; }
+          100% { transform: scale(0.9); opacity: 1; }
+        }
+
+        .cancel-analysis-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          background: transparent;
+          border: 1px solid rgba(244, 63, 94, 0.3);
+          color: var(--danger);
+          padding: 6px 14px;
+          border-radius: var(--radius-sm);
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .cancel-analysis-btn:hover {
+          background: rgba(244, 63, 94, 0.1);
+          border-color: var(--danger);
+        }
+
+        /* Shimmer Skeletons */
+        .breakdown-skeleton-container {
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+          width: 100%;
+        }
+
+        .skeleton-card {
+          border-radius: var(--radius-md);
+          background: linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0.03) 0%,
+            rgba(255, 255, 255, 0.08) 50%,
+            rgba(255, 255, 255, 0.03) 100%
+          );
+          background-size: 200% 100%;
+          animation: shimmer 1.8s infinite;
+          border: 1px solid var(--border);
+        }
+
+        .skeleton-banner {
+          height: 90px;
+        }
+
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+
+        /* Fallback Banner */
+        .breakdown-fallback-banner {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 12px 16px;
+          background: rgba(245, 158, 11, 0.08);
+          border: 1px solid rgba(245, 158, 11, 0.3);
+          border-radius: var(--radius-sm);
+        }
+
+        .breakdown-fallback-retry-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          padding: 5px 12px;
+          background: rgba(245, 158, 11, 0.15);
+          color: #fbbf24;
+          border: 1px solid rgba(245, 158, 11, 0.4);
+          border-radius: 6px;
+          font-size: 11.5px;
+          font-weight: 700;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: all 0.2s ease;
+        }
+
+        .breakdown-fallback-retry-btn:hover {
+          background: rgba(245, 158, 11, 0.25);
+        }
+
+        /* Learning Resource Cards */
+        .learning-resource-card {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          padding: 12px 14px;
+          background: rgba(0, 0, 0, 0.25);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-sm);
+          text-decoration: none;
+          transition: all 0.2s ease;
+        }
+
+        .learning-resource-card:hover {
+          border-color: var(--accent-cyan);
+          background: rgba(6, 182, 212, 0.04);
+          transform: translateY(-1px);
+        }
+
+        .learning-resource-type-pill {
+          display: inline-block;
+          align-self: flex-start;
+          font-size: 10px;
+          font-weight: 700;
+          text-transform: uppercase;
+          padding: 2px 6px;
+          border-radius: 4px;
+          background: rgba(6, 182, 212, 0.12);
+          color: var(--accent-cyan);
         }
 
         /* Error state */
@@ -665,20 +964,75 @@ export default function IssueBreakdownModal({ issue, owner, repo, onClose }) {
           {/* Modal Body */}
           <div className="breakdown-modal-body">
             {loading && (
-              <div className="breakdown-loading-state">
-                <div className="breakdown-spinner" />
-                <div className="loading-title">Generating Maintainer Breakdown</div>
-                <div className="loading-step-text">
-                  {loadingSteps[loadingStep]}
+              <div className="breakdown-skeleton-container">
+                <div className="stage-tracker-bar">
+                  <div className="stage-steps-row">
+                    {[
+                      { key: 'fetching_issue_context', label: '1. Issue Context' },
+                      { key: 'inspecting_repository', label: '2. Codebase Tree' },
+                      { key: 'synthesizing_ai_breakdown', label: '3. AI Synthesis' },
+                      { key: 'validating_and_grounding', label: '4. Grounding' },
+                    ].map((s) => {
+                      const stages = ['fetching_issue_context', 'inspecting_repository', 'synthesizing_ai_breakdown', 'validating_and_grounding', 'completed']
+                      const currentIdx = stages.indexOf(jobStage)
+                      const thisIdx = stages.indexOf(s.key)
+                      const isDone = currentIdx > thisIdx
+                      const isActive = currentIdx === thisIdx
+                      return (
+                        <div key={s.key} className={`stage-step-pill ${isDone ? 'done' : ''} ${isActive ? 'active' : ''}`}>
+                          {isDone ? <Check size={11} /> : <span className="stage-dot" />}
+                          <span>{s.label}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                    <div className="stage-live-desc">
+                      <div className="breakdown-pulse-dot" />
+                      <span>{stageDescription || 'Analyzing issue context...'}</span>
+                    </div>
+                    <button className="cancel-analysis-btn" onClick={handleCancel}>
+                      <StopCircle size={13} />
+                      Cancel Analysis
+                    </button>
+                  </div>
                 </div>
+
+                {/* Shimmer layout */}
+                <div className="skeleton-card skeleton-banner" />
+                <div className="breakdown-grid-2col">
+                  <div className="skeleton-card" style={{ height: 120 }} />
+                  <div className="skeleton-card" style={{ height: 120 }} />
+                </div>
+                <div className="breakdown-grid-2col">
+                  <div className="skeleton-card" style={{ height: 90 }} />
+                  <div className="skeleton-card" style={{ height: 90 }} />
+                </div>
+                <div className="skeleton-card" style={{ height: 130 }} />
               </div>
             )}
 
-            {error && (
+            {isCancelled && !loading && (
+              <div className="breakdown-error-state">
+                <StopCircle size={40} style={{ color: 'var(--text-muted)' }} />
+                <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>
+                  Analysis Cancelled
+                </div>
+                <div className="breakdown-prose" style={{ maxWidth: 460 }}>
+                  The analysis job was cancelled. You can restart it at any time.
+                </div>
+                <button className="retry-action-btn" onClick={() => fetchBreakdown(true)}>
+                  <RotateCw size={13} />
+                  Restart Analysis
+                </button>
+              </div>
+            )}
+
+            {error && !loading && (
               <div className="breakdown-error-state">
                 <AlertCircle size={40} style={{ color: 'var(--danger)' }} />
                 <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>
-                  Unable to Generate Breakdown
+                  Unable to Complete Analysis
                 </div>
                 <div className="breakdown-prose" style={{ maxWidth: 480 }}>
                   {error}
@@ -690,8 +1044,28 @@ export default function IssueBreakdownModal({ issue, owner, repo, onClose }) {
               </div>
             )}
 
-            {!loading && !error && breakdownData && (
+            {!loading && !error && !isCancelled && breakdownData && (
               <>
+                {/* Fallback Banner */}
+                {breakdownData.is_fallback && (
+                  <div className="breakdown-fallback-banner">
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, flex: 1 }}>
+                      <AlertTriangle size={18} style={{ color: '#f59e0b', flexShrink: 0, marginTop: 2 }} />
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#fde68a' }}>
+                          Deterministic Grounded Fallback Mode
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                          {breakdownData.fallback_reason || 'AI service is temporarily unavailable. This plan was deterministically synthesized from verified repository files and tests.'}
+                        </div>
+                      </div>
+                    </div>
+                    <button className="breakdown-fallback-retry-btn" onClick={() => fetchBreakdown(true)}>
+                      <RotateCw size={12} />
+                      Try AI Again
+                    </button>
+                  </div>
+                )}
                 {/* TAB 1: OVERVIEW & OUTCOME */}
                 {activeTab === 'overview' && (
                   <>
@@ -1088,6 +1462,59 @@ export default function IssueBreakdownModal({ issue, owner, repo, onClose }) {
                         </div>
                       )}
                     </div>
+
+                    {/* Potential Challenges & Pitfalls */}
+                    {breakdownData?.potential_challenges && breakdownData.potential_challenges.length > 0 && (
+                      <div className="breakdown-bento-card" style={{ borderLeft: '4px solid #f59e0b' }}>
+                        <div className="breakdown-card-title" style={{ color: '#f59e0b' }}>
+                          <AlertTriangle size={15} />
+                          Potential Challenges & Pitfalls
+                        </div>
+                        <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--text-muted)', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {breakdownData.potential_challenges.map((challenge, idx) => (
+                            <li key={idx}>
+                              <span style={{ color: 'var(--text)' }}>{challenge}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Relevant Learning Resources */}
+                    {breakdownData?.learning_resources && breakdownData.learning_resources.length > 0 && (
+                      <div className="breakdown-bento-card">
+                        <div className="breakdown-card-title" style={{ color: 'var(--accent-cyan)' }}>
+                          <BookOpen size={15} />
+                          Relevant Learning Resources
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
+                          {breakdownData.learning_resources.map((res, idx) => (
+                            <a
+                              key={idx}
+                              href={res.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="learning-resource-card"
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
+                                  {res.title}
+                                </span>
+                                <ExternalLink size={12} style={{ color: 'var(--accent-cyan)' }} />
+                              </div>
+                              <span className="learning-resource-type-pill">
+                                {res.resource_type}
+                              </span>
+                              {res.description && (
+                                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
+                                  {res.description}
+                                </p>
+                              )}
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
               </>

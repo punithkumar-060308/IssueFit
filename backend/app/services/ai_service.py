@@ -1,6 +1,8 @@
 from __future__ import annotations
+import asyncio
 import json
 import logging
+import random
 import re
 from abc import ABC, abstractmethod
 from typing import Any
@@ -15,6 +17,9 @@ from app.config import (
     OPENAI_BASE_URL,
     LLM_PROVIDER,
     AI_REQUEST_TIMEOUT_SECONDS,
+    AI_MAX_RETRIES,
+    AI_RETRY_BASE_DELAY,
+    AI_RETRY_MAX_DELAY,
 )
 
 logger = logging.getLogger("issuefit.ai")
@@ -46,6 +51,16 @@ class AIRateLimitError(AIError):
 class AITimeoutError(AIError):
     def __init__(self, message: str = "AI breakdown generation timed out. Please try again."):
         super().__init__(message, status_code=504, code="AI_TIMEOUT")
+
+
+class AIServiceUnavailableError(AIError):
+    def __init__(self, message: str = "AI service is temporarily unavailable. Please try again later."):
+        super().__init__(message, status_code=503, code="AI_UNAVAILABLE")
+
+
+class AIServerError(AIError):
+    def __init__(self, message: str = "AI service encountered an internal server error."):
+        super().__init__(message, status_code=502, code="AI_SERVER_ERROR")
 
 
 class AIServiceError(AIError):
@@ -141,10 +156,16 @@ class GeminiProvider(BaseLLMProvider):
         api_key: str | None = None,
         model: str | None = None,
         timeout_seconds: int | None = None,
+        max_retries: int | None = None,
+        retry_base_delay: float | None = None,
+        retry_max_delay: float | None = None,
     ):
         self.api_key = api_key or GEMINI_API_KEY
         self.model = model or GEMINI_MODEL
         self.timeout = float(timeout_seconds or AI_REQUEST_TIMEOUT_SECONDS)
+        self.max_retries = int(max_retries or AI_MAX_RETRIES)
+        self.retry_base_delay = float(retry_base_delay or AI_RETRY_BASE_DELAY)
+        self.retry_max_delay = float(retry_max_delay or AI_RETRY_MAX_DELAY)
 
         if not self.api_key:
             raise AIConfigurationError("GEMINI_API_KEY is not configured.")
@@ -173,37 +194,78 @@ class GeminiProvider(BaseLLMProvider):
             },
         }
 
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(url, json=payload)
-        except httpx.TimeoutException:
-            raise AITimeoutError(f"Gemini API timed out after {self.timeout} seconds.")
-        except httpx.RequestError as exc:
-            raise AIServiceError(f"Network error while connecting to Gemini API: {exc}")
+        last_error: Exception | None = None
 
-        if response.status_code == 429:
-            raise AIRateLimitError("Gemini rate limit exceeded. Please try again later.")
-        if response.status_code in (401, 403):
-            raise AIConfigurationError("Invalid Gemini API key or unauthorized request.")
-        if response.status_code >= 500:
-            raise AIServiceError(f"Gemini service error ({response.status_code}): {response.text[:200]}")
-        if response.status_code != 200:
-            raise AIServiceError(f"Gemini request failed ({response.status_code}): {response.text[:200]}")
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    response = await client.post(url, json=payload)
+            except httpx.TimeoutException as exc:
+                last_error = exc
+                if attempt < self.max_retries:
+                    delay = min(self.retry_max_delay, self.retry_base_delay * (2 ** (attempt - 1))) + random.uniform(0.1, 0.4)
+                    logger.warning(f"Gemini API timeout (attempt {attempt}/{self.max_retries}). Retrying in {delay:.2f}s...")
+                    await asyncio.sleep(delay)
+                    continue
+                raise AITimeoutError(f"Gemini API timed out after {self.timeout}s (attempted {self.max_retries} times).")
+            except httpx.RequestError as exc:
+                last_error = exc
+                if attempt < self.max_retries:
+                    delay = min(self.retry_max_delay, self.retry_base_delay * (2 ** (attempt - 1))) + random.uniform(0.1, 0.4)
+                    logger.warning(f"Gemini network error (attempt {attempt}/{self.max_retries}): {exc}. Retrying in {delay:.2f}s...")
+                    await asyncio.sleep(delay)
+                    continue
+                raise AIServiceError(f"Network error while connecting to Gemini API: {exc}")
 
-        try:
-            resp_data = response.json()
-            candidates = resp_data.get("candidates", [])
-            if not candidates:
-                raise AIResponseValidationError("Gemini returned no candidates.")
-            parts = candidates[0].get("content", {}).get("parts", [])
-            if not parts:
-                raise AIResponseValidationError("Gemini response contained no content parts.")
-            raw_text = parts[0].get("text", "")
-            return extract_json_object(raw_text)
-        except AIResponseValidationError:
-            raise
-        except Exception as exc:
-            raise AIResponseValidationError(f"Failed to process Gemini response: {exc}")
+            # Specific status code handling
+            if response.status_code == 429:
+                if attempt < self.max_retries:
+                    delay = min(self.retry_max_delay, self.retry_base_delay * (2 ** (attempt - 1))) + random.uniform(0.2, 0.6)
+                    logger.warning(f"Gemini 429 rate limit (attempt {attempt}/{self.max_retries}). Retrying in {delay:.2f}s...")
+                    await asyncio.sleep(delay)
+                    continue
+                raise AIRateLimitError("Gemini rate limit exceeded. Please try again later.")
+
+            if response.status_code in (401, 403):
+                # Non-retryable authentication/permission errors
+                raise AIConfigurationError("Invalid Gemini API key or unauthorized request.")
+
+            if response.status_code == 503:
+                if attempt < self.max_retries:
+                    delay = min(self.retry_max_delay, self.retry_base_delay * (2 ** (attempt - 1))) + random.uniform(0.2, 0.5)
+                    logger.warning(f"Gemini 503 service unavailable (attempt {attempt}/{self.max_retries}). Retrying in {delay:.2f}s...")
+                    await asyncio.sleep(delay)
+                    continue
+                raise AIServiceUnavailableError("Gemini service is temporarily unavailable (503).")
+
+            if response.status_code in (500, 502):
+                if attempt < self.max_retries:
+                    delay = min(self.retry_max_delay, self.retry_base_delay * (2 ** (attempt - 1))) + random.uniform(0.2, 0.5)
+                    logger.warning(f"Gemini server error {response.status_code} (attempt {attempt}/{self.max_retries}). Retrying in {delay:.2f}s...")
+                    await asyncio.sleep(delay)
+                    continue
+                raise AIServerError(f"Gemini service error ({response.status_code}).")
+
+            if response.status_code != 200:
+                raise AIServiceError(f"Gemini request failed ({response.status_code}): {response.text[:200]}")
+
+            # Successful response parsing
+            try:
+                resp_data = response.json()
+                candidates = resp_data.get("candidates", [])
+                if not candidates:
+                    raise AIResponseValidationError("Gemini returned no candidates.")
+                parts = candidates[0].get("content", {}).get("parts", [])
+                if not parts:
+                    raise AIResponseValidationError("Gemini response contained no content parts.")
+                raw_text = parts[0].get("text", "")
+                return extract_json_object(raw_text)
+            except AIResponseValidationError:
+                raise
+            except Exception as exc:
+                raise AIResponseValidationError(f"Failed to process Gemini response: {exc}")
+
+        raise AIServiceError(f"Gemini request failed after {self.max_retries} attempts: {last_error}")
 
 
 # -------------------------------------------------------------
@@ -217,11 +279,17 @@ class OpenAIProvider(BaseLLMProvider):
         model: str | None = None,
         base_url: str | None = None,
         timeout_seconds: int | None = None,
+        max_retries: int | None = None,
+        retry_base_delay: float | None = None,
+        retry_max_delay: float | None = None,
     ):
         self.api_key = api_key or OPENAI_API_KEY
         self.model = model or OPENAI_MODEL
         self.base_url = (base_url or OPENAI_BASE_URL).rstrip("/")
         self.timeout = float(timeout_seconds or AI_REQUEST_TIMEOUT_SECONDS)
+        self.max_retries = int(max_retries or AI_MAX_RETRIES)
+        self.retry_base_delay = float(retry_base_delay or AI_RETRY_BASE_DELAY)
+        self.retry_max_delay = float(retry_max_delay or AI_RETRY_MAX_DELAY)
 
         if not self.api_key:
             raise AIConfigurationError("OPENAI_API_KEY is not configured.")
@@ -250,31 +318,69 @@ class OpenAIProvider(BaseLLMProvider):
             "temperature": 0.2,
         }
 
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(url, headers=headers, json=payload)
-        except httpx.TimeoutException:
-            raise AITimeoutError(f"OpenAI API timed out after {self.timeout} seconds.")
-        except httpx.RequestError as exc:
-            raise AIServiceError(f"Network error while connecting to OpenAI API: {exc}")
+        last_error: Exception | None = None
 
-        if response.status_code == 429:
-            raise AIRateLimitError("OpenAI rate limit reached. Please try again later.")
-        if response.status_code in (401, 403):
-            raise AIConfigurationError("Invalid OpenAI API credentials.")
-        if response.status_code >= 500:
-            raise AIServiceError(f"OpenAI service error ({response.status_code}): {response.text[:200]}")
-        if response.status_code != 200:
-            raise AIServiceError(f"OpenAI request failed ({response.status_code}): {response.text[:200]}")
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    response = await client.post(url, headers=headers, json=payload)
+            except httpx.TimeoutException as exc:
+                last_error = exc
+                if attempt < self.max_retries:
+                    delay = min(self.retry_max_delay, self.retry_base_delay * (2 ** (attempt - 1))) + random.uniform(0.1, 0.4)
+                    logger.warning(f"OpenAI API timeout (attempt {attempt}/{self.max_retries}). Retrying in {delay:.2f}s...")
+                    await asyncio.sleep(delay)
+                    continue
+                raise AITimeoutError(f"OpenAI API timed out after {self.timeout}s (attempted {self.max_retries} times).")
+            except httpx.RequestError as exc:
+                last_error = exc
+                if attempt < self.max_retries:
+                    delay = min(self.retry_max_delay, self.retry_base_delay * (2 ** (attempt - 1))) + random.uniform(0.1, 0.4)
+                    logger.warning(f"OpenAI network error (attempt {attempt}/{self.max_retries}): {exc}. Retrying in {delay:.2f}s...")
+                    await asyncio.sleep(delay)
+                    continue
+                raise AIServiceError(f"Network error while connecting to OpenAI API: {exc}")
 
-        try:
-            resp_data = response.json()
-            content = resp_data["choices"][0]["message"]["content"]
-            return extract_json_object(content)
-        except AIResponseValidationError:
-            raise
-        except Exception as exc:
-            raise AIResponseValidationError(f"Failed to process OpenAI response: {exc}")
+            if response.status_code == 429:
+                if attempt < self.max_retries:
+                    delay = min(self.retry_max_delay, self.retry_base_delay * (2 ** (attempt - 1))) + random.uniform(0.2, 0.6)
+                    logger.warning(f"OpenAI 429 rate limit (attempt {attempt}/{self.max_retries}). Retrying in {delay:.2f}s...")
+                    await asyncio.sleep(delay)
+                    continue
+                raise AIRateLimitError("OpenAI rate limit reached. Please try again later.")
+
+            if response.status_code in (401, 403):
+                raise AIConfigurationError("Invalid OpenAI API credentials.")
+
+            if response.status_code == 503:
+                if attempt < self.max_retries:
+                    delay = min(self.retry_max_delay, self.retry_base_delay * (2 ** (attempt - 1))) + random.uniform(0.2, 0.5)
+                    logger.warning(f"OpenAI 503 service unavailable (attempt {attempt}/{self.max_retries}). Retrying in {delay:.2f}s...")
+                    await asyncio.sleep(delay)
+                    continue
+                raise AIServiceUnavailableError("OpenAI service is temporarily unavailable (503).")
+
+            if response.status_code in (500, 502):
+                if attempt < self.max_retries:
+                    delay = min(self.retry_max_delay, self.retry_base_delay * (2 ** (attempt - 1))) + random.uniform(0.2, 0.5)
+                    logger.warning(f"OpenAI server error {response.status_code} (attempt {attempt}/{self.max_retries}). Retrying in {delay:.2f}s...")
+                    await asyncio.sleep(delay)
+                    continue
+                raise AIServerError(f"OpenAI service error ({response.status_code}).")
+
+            if response.status_code != 200:
+                raise AIServiceError(f"OpenAI request failed ({response.status_code}): {response.text[:200]}")
+
+            try:
+                resp_data = response.json()
+                content = resp_data["choices"][0]["message"]["content"]
+                return extract_json_object(content)
+            except AIResponseValidationError:
+                raise
+            except Exception as exc:
+                raise AIResponseValidationError(f"Failed to process OpenAI response: {exc}")
+
+        raise AIServiceError(f"OpenAI request failed after {self.max_retries} attempts: {last_error}")
 
 
 # -------------------------------------------------------------
@@ -299,8 +405,12 @@ class MockProvider(BaseLLMProvider):
             raise AITimeoutError("Mock provider timeout")
         if self.fail_mode == "rate_limit":
             raise AIRateLimitError("Mock provider rate limit")
+        if self.fail_mode == "unavailable":
+            raise AIServiceUnavailableError("Mock provider 503 unavailable")
         if self.fail_mode == "server_error":
             raise AIServiceError("Mock provider 500 error")
+        if self.fail_mode == "ai_server_error":
+            raise AIServerError("Mock provider internal upstream error")
         if self.fail_mode == "malformed":
             return {"bad": "structure"}
 
@@ -393,6 +503,18 @@ class MockProvider(BaseLLMProvider):
                 "reasoning": "Requires understanding routing and adding tests without breaking contracts.",
                 "complexity_factors": ["Input validation", "Testing setup"],
             },
+            "potential_challenges": [
+                "Handling malformed inputs and boundary values gracefully",
+                "Ensuring zero regressions across existing test suites",
+            ],
+            "learning_resources": [
+                {
+                    "title": "FastAPI Validation & Testing Guide",
+                    "url": "https://fastapi.tiangolo.com/tutorial/testing/",
+                    "resource_type": "documentation",
+                    "description": "Documentation covering endpoints, testing, and validation best practices",
+                }
+            ],
         }
 
 

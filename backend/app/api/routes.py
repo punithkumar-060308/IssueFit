@@ -30,10 +30,13 @@ from app.services.contributor_service import build_contributor_profile
 from app.services.issue_service import get_open_issues
 from app.services.repository_service import validate_and_fetch_repository, parse_github_url
 from app.services.breakdown_service import get_or_generate_issue_breakdown
+from app.services.job_manager import job_manager
 from app.services.ai_service import (
     AIConfigurationError,
     AIRateLimitError,
     AITimeoutError,
+    AIServiceUnavailableError,
+    AIServerError,
     AIServiceError,
     AIResponseValidationError,
 )
@@ -214,6 +217,7 @@ async def breakdown_issue(
             owner=req.owner,
             repo=req.repo,
             issue_number=req.issue_number,
+            allow_fallback=req.allow_fallback,
         )
         return IssueBreakdownResponse(
             success=True,
@@ -221,6 +225,7 @@ async def breakdown_issue(
             repo=req.repo,
             issue_number=req.issue_number,
             cached=is_cached,
+            is_fallback=getattr(data, "is_fallback", False),
             breakdown=data,
         )
     except GitHubAPIError as exc:
@@ -243,14 +248,98 @@ async def breakdown_issue(
         return _breakdown_error_response(exc.status_code, exc.code, exc.message)
     except AITimeoutError as exc:
         return _breakdown_error_response(exc.status_code, exc.code, exc.message)
+    except AIServiceUnavailableError as exc:
+        return _breakdown_error_response(exc.status_code, exc.code, exc.message)
+    except AIServerError as exc:
+        return _breakdown_error_response(exc.status_code, exc.code, exc.message)
     except AIServiceError as exc:
         return _breakdown_error_response(exc.status_code, exc.code, exc.message)
     except AIResponseValidationError as exc:
         return _breakdown_error_response(exc.status_code, exc.code, exc.message)
     except Exception as exc:
         return _breakdown_error_response(
-            500, "INTERNAL_ERROR", f"An unexpected error occurred while analyzing the issue: {str(exc)}"
+            500, "INTERNAL_ERROR", "An unexpected error occurred while analyzing the issue. Please try again."
         )
+
+
+@router.post("/issues/breakdown/start")
+async def start_issue_breakdown(
+    request: IssueBreakdownRequest,
+    current_user: dict = Depends(require_github_connected_user),
+):
+    """
+    Start an asynchronous issue analysis job.
+    Returns immediately with a job_id and initial stage so the UI is never frozen.
+    """
+    req = request.clean()
+    job = await job_manager.start_job(
+        owner=req.owner,
+        repo=req.repo,
+        issue_number=req.issue_number,
+    )
+    return {
+        "success": True,
+        "job_id": job.job_id,
+        "status": job.status,
+        "stage": job.stage,
+        "stage_description": job.stage_description,
+        "cached": job.cached,
+        "is_fallback": job.is_fallback,
+        "breakdown": job.breakdown.model_dump() if job.breakdown else None,
+    }
+
+
+@router.get("/issues/breakdown/status/{job_id}")
+async def get_issue_breakdown_status(job_id: str):
+    """
+    Poll the live status and genuine analysis stage of an in-flight analysis job.
+    """
+    job = job_manager.get_job(job_id)
+    if not job:
+        return _breakdown_error_response(404, "JOB_NOT_FOUND", "Analysis job not found or has expired.")
+
+    return {
+        "success": True,
+        "job_id": job.job_id,
+        "owner": job.owner,
+        "repo": job.repo,
+        "issue_number": job.issue_number,
+        "status": job.status,
+        "stage": job.stage,
+        "stage_description": job.stage_description,
+        "created_at": job.created_at,
+        "updated_at": job.updated_at,
+        "cached": job.cached,
+        "is_fallback": job.is_fallback,
+        "breakdown": job.breakdown.model_dump() if job.breakdown else None,
+        "error": job.error.model_dump() if job.error else None,
+    }
+
+
+@router.post("/issues/breakdown/cancel/{job_id}")
+async def cancel_issue_breakdown(job_id: str):
+    """
+    Cancel an active in-flight analysis job.
+    """
+    success = await job_manager.cancel_job(job_id)
+    if not success:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "success": False,
+                "job_id": job_id,
+                "error": {
+                    "code": "JOB_NOT_FOUND",
+                    "message": f"Job {job_id} not found or already completed/cancelled.",
+                },
+            },
+        )
+    return {
+        "success": True,
+        "job_id": job_id,
+        "status": "cancelled",
+        "message": "Analysis cancelled.",
+    }
 
 
 @router.get("/repository/{owner}/{repo}")
